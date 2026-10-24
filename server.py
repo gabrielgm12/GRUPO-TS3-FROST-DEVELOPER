@@ -90,8 +90,9 @@ def save(path, data):
 # cada comando custa pontos, o balde esvazia 4 pontos/s e nunca deixamos passar de 90 (bem abaixo do limite).
 BUCKET_MAX = 90.0
 LEAK_PER_S = 4.0
-COST_LIST = 25.0       # listas grandes (clientlist, servergrouplist, permoverview...)
-COST_CMD = 12.0        # comandos comuns
+COST_NET = 15.0        # comandos que realmente vão até o servidor (checam permissão / gravam)
+NET_CMDS = ("permoverview", "servergroupsbyclientid", "servergroupaddclient", "servergroupdelclient")
+# auth, clientnotifyregister, clientlist, whoami e servergrouplist são respondidos pelo próprio TeamSpeak local: não contam
 _bucket = [0.0, time.time()]
 _cooldown_until = [0.0]
 
@@ -100,7 +101,10 @@ def throttle(text=""):
     now = time.time()
     if now < _cooldown_until[0]:
         raise RuntimeError(f"Pausa de segurança: aguarde {int(_cooldown_until[0] - now) + 1}s (o servidor reclamou de excesso de comandos).")
-    cost = COST_LIST if text.split(" ")[0] in ("clientlist", "servergrouplist", "permoverview", "servergroupsbyclientid", "whoami") else COST_CMD
+    cost = COST_NET if text.split(" ")[0] in NET_CMDS else 0.0
+    if cost == 0:
+        time.sleep(0.05)
+        return
     # esvazia o balde pelo tempo que passou
     _bucket[0] = max(0.0, _bucket[0] - (now - _bucket[1]) * LEAK_PER_S)
     _bucket[1] = now

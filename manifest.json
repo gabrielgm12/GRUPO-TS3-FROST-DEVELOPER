@@ -1,12 +1,12 @@
 {
-  "version": "1.4",
-  "notes": "Mostra 'sem permissão' nas tags que o seu TS3 bloqueia (regra de poder) e anti-flood mais rígido",
+  "version": "1.5",
+  "notes": "Anti-flood só conta comandos que vão ao servidor (mais rápido, mesma proteção)",
   "files": {
-    "server.py": "05af12069c5962588cd1cf591529871d8e26a7e8cf43b5faf114422786e3e8e2",
+    "server.py": "0849686088f77cb2112e5651a4441e973959302e13a9855efe8104bb7cb3ddca",
     "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
     "index.html": "f18958567313cf1a2add88ed762ab3740656f1be2f2c68b99b7de786b6039fc5",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "9d2bf356d838faba1759efd3e9de32647bd68e9da8c92878074b392872e9f04e"
+    "version.txt": "03c76d47c407b24353b3121bd96490373bd6c5de05f6b3d32bd420c4810f1160"
   }
 }
