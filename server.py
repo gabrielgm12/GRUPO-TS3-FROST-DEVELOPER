@@ -84,13 +84,30 @@ def save(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+# --- proteção contra anti-flood do servidor: o TeamSpeak bane quem manda comandos demais, mesmo sem falar nada ---
+MIN_GAP = 0.7          # segundos entre dois comandos (≈ 85 por minuto no máximo)
+_last_cmd = [0.0]
+_cooldown_until = [0.0]
+
+
+def throttle():
+    now = time.time()
+    if now < _cooldown_until[0]:
+        raise RuntimeError(f"Pausa de segurança: aguarde {int(_cooldown_until[0] - now) + 1}s (o servidor reclamou de excesso de comandos).")
+    wait = _last_cmd[0] + MIN_GAP - now
+    if wait > 0:
+        time.sleep(wait)
+    _last_cmd[0] = time.time()
+
+
 class TS:
     def __init__(self, apikey):
         self.s = socket.create_connection(("127.0.0.1", 25639), timeout=5)
         self.buf = b""
         self._read_until_prompt()
         self.cmd("auth apikey=" + apikey)
-        self.cmd("clientnotifyregister schandlerid=1 event=any")
+        for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid"):
+            self.cmd(f"clientnotifyregister schandlerid=1 event={ev}")
 
     def _readline(self):
         while b"\n" not in self.buf:
@@ -101,6 +118,14 @@ class TS:
         line, self.buf = self.buf.split(b"\n", 1)
         return line.decode("utf-8", "replace").strip()
 
+    def _drain(self):
+        """Descarta qualquer linha sobrando de um comando anterior (a conexão é reaproveitada)."""
+        import select
+        self.buf = b""
+        while select.select([self.s], [], [], 0)[0]:
+            if not self.s.recv(65536):
+                raise ConnectionError("conexão fechada")
+
     def _read_until_prompt(self):
         # banner do ClientQuery termina com "selected schandlerid=..."
         while True:
@@ -109,6 +134,8 @@ class TS:
 
     def cmd(self, text, expect=None):
         """Envia um comando. Com `expect`, o resultado vem numa linha notify<expect>."""
+        throttle()
+        self._drain()
         self.s.sendall((text + "\n").encode("utf-8"))
         rows, got = [], []
         while True:
@@ -118,12 +145,12 @@ class TS:
             if line.startswith("notify"):
                 if expect and line.startswith("notify" + expect + " "):
                     got.extend(parse(p) for p in line.split("|"))
-                    if expect == "servergrouplist":  # esse não manda "error" depois
-                        return got
                 continue
             if line.startswith("error "):
                 e = parse(line)
                 if e.get("id") != "0":
+                    if "flood" in (e.get("msg", "") + e.get("extra_msg", "")).lower() or e.get("id") in ("524", "3329"):
+                        _cooldown_until[0] = time.time() + 90
                     raise RuntimeError(f"{e.get('msg', 'erro')} (id={e.get('id')}) {e.get('extra_msg', '')}".strip())
                 return got if expect else rows
             rows.extend(parse(p) for p in line.split("|"))
@@ -135,11 +162,28 @@ class TS:
             pass
 
 
+_conn = [None]
+
+
 def ts_session():
-    cfg = load(CONFIG, {})
-    if not cfg.get("apikey"):
-        raise RuntimeError("API key não configurada")
-    return TS(cfg["apikey"])
+    if _conn[0] is None:
+        cfg = load(CONFIG, {})
+        if not cfg.get("apikey"):
+            raise RuntimeError("API key não configurada")
+        _conn[0] = TS(cfg["apikey"])
+    return _conn[0]
+
+
+_cache = {}
+
+
+def cached(key, ttl, fn):
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    val = fn()
+    _cache[key] = (time.time(), val)
+    return val
 
 
 LEARN_TTL = 600  # segundos: depois disso o app tenta de novo (as permissões podem ter mudado)
@@ -180,9 +224,9 @@ def api(path, body):
         ts = ts_session()
         try:
             if path == "/api/info":
-                groups = ts.cmd("servergrouplist", "servergrouplist")
+                groups = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 groups = [g for g in groups if g.get("type") in ("1", None)]  # só grupos normais
-                clients = ts.cmd("clientlist")
+                clients = cached("clients", 15, lambda: ts.cmd("clientlist"))
                 clients = [c for c in clients if c.get("client_type") == "0"]
                 return {
                     "learned": fresh_learned(),
@@ -199,14 +243,16 @@ def api(path, body):
             if path == "/api/canremove":
                 # Teste sem efeito colateral: tenta remover de um ID que não existe. O servidor checa a permissão
                 # ANTES de procurar o cliente, então "2568" = sem permissão; qualquer outro erro = tem permissão.
-                result = {}
-                for sgid in body.get("sgids", []):
+                def probe(sgid):
                     try:
                         ts.cmd(f"servergroupdelclient sgid={sgid} cldbid=2000000000")
-                        result[sgid] = True
+                        return True
                     except RuntimeError as e:
-                        result[sgid] = "id=2568" not in str(e)
-                return {"can": result}
+                        if "Pausa de seguran" in str(e):
+                            raise
+                        return "id=2568" not in str(e)
+                # a permissão é do grupo, não da pessoa: guarda 15 min para não repetir comandos
+                return {"can": {sgid: cached("rem" + sgid, 900, lambda sg=sgid: probe(sg)) for sgid in body.get("sgids", [])}}
             if path == "/api/apply":
                 cldbid, add, rem = body["cldbid"], body.get("add", []), body.get("remove", [])
                 errors, learned, failed = [], load(LEARNED, {}), []
@@ -225,9 +271,12 @@ def api(path, body):
                             errors.append(f"{key} {sgid}: {e}")
                         entry["t"][key] = time.time()
                 save(LEARNED, learned)
+                _cache.clear()
                 return {"ok": not errors, "errors": errors, "failed": failed, "learned": fresh_learned()}
-        finally:
-            ts.close()
+        except (OSError, ConnectionError):
+            _conn[0] = None  # reconecta na próxima
+            _cache.clear()
+            raise
     raise RuntimeError("rota desconhecida")
 
 

@@ -143,7 +143,7 @@ footer{background:rgba(8,5,18,.7)}
 
 <script>
 const $=id=>document.getElementById(id);
-let noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -245,9 +245,9 @@ async function load(){
 }
 $('only').onchange=e=>{onlySel=e.target.checked;renderGroups()};$('qc').oninput=renderClients;$('qg').oninput=renderGroups;
 /* ao voltar para a janela: atualiza a lista e os grupos da pessoa (se você não tem mudança pendente) */
-let busy=false;
+let busy=false,lastSoft=0;
 async function softRefresh(){
-  if(busy||document.hidden) return; busy=true;
+  if(busy||document.hidden||Date.now()-lastSoft<20000) return; busy=true;lastSoft=Date.now();
   try{
     const r=await post('/api/info');learned=r.learned||{};
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
@@ -260,7 +260,7 @@ async function softRefresh(){
 }
 window.addEventListener('focus',softRefresh);
 document.addEventListener('visibilitychange',softRefresh);
-setInterval(softRefresh,30000);
+setInterval(softRefresh,90000);
 $('reload').onclick=async()=>{await post('/api/forget').catch(()=>{});await load();if(cur){const c=clients.find(x=>x.cldbid===cur.cldbid);c?pick(c):(cur=null,renderWho(),update())}};
 $('reset').onclick=()=>{want=new Set(orig);update()};
 $('apply').onclick=async()=>{
@@ -272,7 +272,7 @@ $('apply').onclick=async()=>{
     const okN=d.add.length+d.rem.length-(r.failed||[]).length;
     if(r.ok) toast(`Pronto! +${d.add.length} / −${d.rem.length}`);
     else toast(`${okN} ok · falhou: `+r.failed.map(f=>`${nm(f.sgid)} (${/2568/.test(f.error)?'sem permissão':f.error.replace(/\(id=.*$/,'')})`).join(', '),false);
-    orig=new Set((await post('/api/member',{cldbid:cur.cldbid})).sgids);want=new Set(orig);await probeRemove();renderWho();update()}
+    orig=new Set((await post('/api/member',{cldbid:cur.cldbid})).sgids);want=new Set(orig);await probeRemove();renderWho();update();if(staged)setTimeout(()=>$('updgo').click(),2500)}
   catch(e){toast(e.message,false);update()}
 };
 $('cfg').onclick=()=>$('dlg').showModal();
@@ -288,7 +288,12 @@ async function checkUpdate(manual){
     if(!c.available){ if(manual) toast('Você já está na versão mais nova ('+c.current+')'); return }
     banner('⬇ Baixando a versão '+c.latest+'…',false);
     const d=await post('/api/update/download');
-    banner('✅ Versão '+d.latest+' pronta'+(c.notes?' — '+c.notes:''),true);
+    banner('✅ Versão '+d.latest+' baixada'+(c.notes?' — '+c.notes:''),true);
+    // atualização automática: reinicia sozinho se você não tem mudanças marcadas; senão espera você aplicar
+    staged=true;
+    const pending=cur&&[...want].sort().join()!==[...orig].sort().join();
+    if(!pending) setTimeout(()=>$('updgo').click(),1200);
+    else banner('✅ Versão '+d.latest+' baixada — vai reiniciar quando você terminar (ou clique ao lado)',true);
   }catch(e){ if(manual) toast('Falha ao atualizar: '+e.message,false); else $('upd').hidden=true }
 }
 $('chk').onclick=()=>checkUpdate(true);
@@ -298,7 +303,7 @@ $('updgo').onclick=async()=>{
   const t0=Date.now();
   const iv=setInterval(async()=>{ try{ const r=await fetch('/api/status'); if(r.ok&&Date.now()-t0>1500){clearInterval(iv);location.reload()} }catch(e){} },700);
 };
-setTimeout(()=>checkUpdate(false),2500);
+setTimeout(()=>checkUpdate(false),800);
 setInterval(()=>checkUpdate(false),6*3600*1000);
 (async()=>{const s=await (await fetch('/api/status')).json();$('ver').textContent='v'+(s.version||'');if(!s.hasKey)$('dlg').showModal();else load()})();
 </script>
