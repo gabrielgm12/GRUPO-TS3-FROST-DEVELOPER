@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grupos TS3</title>
+<link rel="icon" href="/icon.png">
+<style>
+:root{
+  /* paleta Frost */
+  --bg:#05030b;--panel:rgba(14,10,26,.72);--panel2:rgba(26,18,46,.7);--panel3:rgba(38,26,66,.72);
+  --line:rgba(167,139,250,.16);--line2:rgba(167,139,250,.32);
+  --txt:#f6f1ff;--mut:#b6a9d6;--mut2:#8878ad;
+  --acc:#a855f7;--acc2:#7c3aed;--soft:#c084fc;--sky:#60a5fa;--pink:#ec4899;
+  --grad:linear-gradient(135deg,#60a5fa 0%,#8b5cf6 52%,#ec4899 100%);
+  --glow:0 10px 30px rgba(139,92,246,.42);
+  --ok:#34d399;--bad:#f87171;
+}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none}
+input{-webkit-user-select:text;user-select:text}
+html,body{height:100%}
+body{margin:0;background:var(--bg);position:relative;
+  color:var(--txt);font:13.5px -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);backdrop-filter:blur(8px)}
+.logo{width:34px;height:34px;border-radius:10px;background:var(--grad);box-shadow:var(--glow);display:grid;place-items:center;font-weight:800}
+header h1{font-size:15px;margin:0;font-weight:700}
+header small{color:var(--mut);display:block;font-weight:400;font-size:11.5px}
+.sp{flex:1}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:7px 12px;border-radius:9px;cursor:pointer;font:inherit;font-weight:600;transition:.15s}
+.btn:hover{border-color:var(--line2);background:var(--panel3)}
+.btn.pri{background:var(--grad);border:0;color:#fff;box-shadow:var(--glow)}
+.btn.pri:hover{filter:brightness(1.1)}
+.btn:disabled{opacity:.4;cursor:default;box-shadow:none;filter:none}
+main{flex:1;min-height:0;display:grid;grid-template-columns:340px 1fr;gap:16px;padding:16px 20px}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.card>h2{margin:0;padding:12px 14px 0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);display:flex;justify-content:space-between}
+.search{margin:10px 12px;position:relative}
+.search input{width:100%;padding:10px 12px 10px 34px;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--txt);font:inherit;outline:none}
+.search input:focus{border-color:var(--acc);box-shadow:0 0 0 3px #6d7cff25}
+.search:before{content:"⌕";position:absolute;left:12px;top:7px;color:var(--mut);font-size:17px}
+.list{overflow:auto;padding:0 8px 10px;flex:1}
+.list::-webkit-scrollbar{width:8px}.list::-webkit-scrollbar-thumb{background:#2a3047;border-radius:8px}
+.row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.row:hover{background:var(--panel2)}
+.row.sel{background:#232a55;border-color:#3b4690}
+.av{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:#fff;flex:none}
+.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{color:var(--mut);text-align:center;padding:30px 10px}
+.who{display:flex;align-items:center;gap:12px;padding:14px;border-bottom:1px solid var(--line)}
+.who .av{width:42px;height:42px;font-size:16px}
+.who b{font-size:15px}.who span{color:var(--mut);font-size:12px;display:block}
+.chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0;align-items:center}
+.chips label{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:5px 11px;cursor:pointer;font-size:12px;font-weight:600}
+.chip:hover{border-color:var(--acc);color:#fff}
+.chip.add{border-style:dashed;color:var(--mut)}
+.grp{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer}
+.grp:hover{background:var(--panel2)}
+.grp input{display:none}
+.box{width:18px;height:18px;border-radius:6px;border:2px solid #3a4160;display:grid;place-items:center;flex:none;transition:.12s}
+.grp input:checked+.box{background:var(--acc);border-color:var(--acc)}
+.grp input:checked+.box:after{content:"✓";color:#fff;font-size:12px;font-weight:800}
+.grp.dis{opacity:.45;pointer-events:none}
+.badge{margin-left:auto;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px}
+.b-has{background:#1f2a24;color:var(--ok)}.b-lock{background:rgba(248,113,113,.14);color:var(--bad)}
+.b-add{background:#1d2b3f;color:#7cc4ff}.b-rem{background:#3a1f25;color:var(--bad)}
+footer{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid var(--line);background:#12151d}
+.sum{color:var(--mut);font-size:12.5px}.sum b{color:var(--txt)}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;padding:10px 16px;border-radius:10px;background:#111522;border:1px solid var(--line);transition:.25s;pointer-events:none;max-width:80%}
+#toast.show{opacity:1;transform:translateX(-50%)}
+#toast.ok{border-color:var(--ok)}#toast.bad{border-color:var(--bad)}
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;max-width:460px;width:90%;padding:20px}
+dialog::backdrop{background:#000a}
+dialog input{width:100%;padding:10px;margin:10px 0;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--txt);font:inherit}
+dialog p{color:var(--mut);line-height:1.5}
+.bar{display:flex;gap:8px;justify-content:flex-end}
+.sep{margin:12px 6px 4px;padding:5px 10px;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--acc);background:#1a1f38;border-radius:8px}
+.tog{margin-left:auto;font-size:12px;color:var(--mut);display:flex;gap:6px;align-items:center;cursor:pointer;padding-right:12px}
+
+body:before,body:after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0}
+body:before{background:url(skin-frost.jpg) center 46%/cover no-repeat;filter:blur(14px) saturate(1.35) brightness(.8);transform:scale(1.12)}
+body:after{background:radial-gradient(ellipse 80% 60% at 50% 0%,rgba(139,92,246,.18),transparent 70%),linear-gradient(180deg,rgba(5,3,11,.32),rgba(5,3,11,.82) 75%)}
+body>*:not(dialog):not(#toast){position:relative;z-index:1}
+.hero{height:132px;flex:none;position:relative;background:linear-gradient(180deg,transparent 40%,rgba(5,3,11,.95)),url(skin-frost.jpg) center 44%/cover;border-bottom:1px solid var(--line2);display:flex;align-items:flex-end;padding:0 22px 12px;gap:12px}
+.hero h1{font-size:19px;margin:0;text-shadow:0 2px 12px #000}
+.hero small{display:block;color:var(--mut);font-weight:500;font-size:12px;text-shadow:0 1px 8px #000}
+.hero .actions{margin-left:auto;display:flex;gap:8px}
+.card,header,footer{backdrop-filter:blur(14px)}
+.row.sel{background:rgba(168,85,247,.18);border-color:rgba(168,85,247,.5)}
+.search input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(168,85,247,.22)}
+.grp input:checked+.box{background:var(--grad);border-color:transparent}
+.sep{background:rgba(124,58,237,.18);color:var(--soft)}
+.chip:hover{background:var(--acc2);border-color:var(--acc)}
+.b-add{background:rgba(96,165,250,.16);color:var(--sky)}
+footer{background:rgba(8,5,18,.7)}
+#toast{background:rgba(14,10,26,.95)}
+.upd,#upd{margin:12px 20px 0;padding:10px 14px;border-radius:12px;background:linear-gradient(90deg,rgba(96,165,250,.18),rgba(168,85,247,.2),rgba(236,72,153,.16));border:1px solid var(--line2);display:flex;align-items:center;gap:12px}
+#upd[hidden]{display:none}#upd .btn{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="logo">G</div>
+  <h1>Grupos TS3 <span id="ver" style="font-size:11px;color:var(--mut);font-weight:600"></span><small id="sub">Conectando…</small></h1>
+  <div class="actions">
+    <button class="btn" id="chk" title="Buscar atualização no GitHub">⬆ Atualização</button>
+    <button class="btn" id="reload">↻ Atualizar</button>
+    <button class="btn" id="cfg">🔑 API key</button>
+  </div>
+</div>
+
+<div id="upd" hidden><span id="updtxt"></span><button class="btn pri" id="updgo" hidden>Reiniciar agora</button></div>
+<main>
+  <section class="card">
+    <h2>Pessoas <span id="ccount"></span></h2>
+    <div class="search"><input id="qc" placeholder="Buscar pelo nome…" autofocus></div>
+    <div class="list" id="clients"></div>
+  </section>
+
+  <section class="card">
+    <div class="who" id="who"><div class="empty" style="padding:6px">← Escolha uma pessoa para começar</div></div>
+    <div class="chips" id="presets"></div>
+    <div style="display:flex;align-items:center"><div class="search" style="flex:1"><input id="qg" placeholder="Buscar grupo… (pode digitar normal: supervisor, vip, staff)"></div><label class="tog"><input type="checkbox" id="only"> só marcados</label></div>
+    <div class="list" id="groups"></div>
+    <footer>
+      <div class="sum" id="sum">Nenhuma mudança</div>
+      <div class="sp"></div>
+      <button class="btn" id="reset" disabled>Desfazer</button>
+      <button class="btn pri" id="apply" disabled>Aplicar</button>
+    </footer>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<dialog id="dlg">
+  <h3 style="margin-top:0">API key do ClientQuery</h3>
+  <p>No TeamSpeak: <b>Preferências → Suplementos → My Addons → Plug-ins → ClientQuery → Configurações</b>. Copie a chave e cole aqui.</p>
+  <input type="password" id="key" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX">
+  <div class="bar"><button class="btn" id="keyno">Cancelar</button><button class="btn pri" id="keyok">Salvar</button></div>
+</dialog>
+
+<script>
+const $=id=>document.getElementById(id);
+let noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const LETTERS={
+  a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
+  i:"ɪƗƖıιᎥ",j:"ᴊʝʄ",k:"ᴋƘƙкқҜҠκ",l:"ʟŁłᒪɮ",m:"ᴍмΜϻɱ₥ᎷM",n:"ɴΝƝƞηиทɳ₦ᑎᴎП",o:"ᴏØøσԾѲӨӦƟθ๏Ꝋ",p:"ᴘƤ₱ρƿ",q:"ǫɋ",
+  r:"ʀƦɌяɾЯꞦɽᖇᎡ",s:"ꜱƧѕรֆȿꞨᏚ",t:"ᴛŦŧƬтτȾ",u:"ᴜυцƱʊɄ",v:"ᴠƲνʌᏙ",w:"ᴡʍωᎳ",x:"ҲЖ",y:"ʏƔуყ¥",z:"ᴢƵƶʑȥ"};
+const MAP={};
+for(const k in LETTERS) for(const ch of LETTERS[k]) MAP[ch]=k;
+/* "esqueleto" de busca: tira acentos/enfeites, troca letras estilizadas por a-z */
+const fold=s=>{
+  let o='';
+  for(const ch of String(s)){
+    if(MAP[ch]){o+=MAP[ch];continue}
+    for(const c2 of ch.normalize('NFKD')){ if(!/\p{M}/u.test(c2)) o+=MAP[c2]||c2 }
+  }
+  return o.toLowerCase().replace(/[^a-z0-9]+/g,'');
+};
+/* acha pelo "esqueleto" (letras normais) OU pelo texto original (japonês, símbolos, etc.) */
+const match=(name,q)=>{
+  q=q.trim(); if(!q) return true;
+  const fq=fold(q);
+  return (fq&&fold(name).includes(fq)) || name.toLowerCase().includes(q.toLowerCase());
+};
+const norm=fold;
+const color=s=>{let h=0;for(const c of s)h=(h*31+c.codePointAt(0))%360;return `hsl(${h} 55% 45%)`};
+const ini=s=>{const m=[...s.replace(/[^\p{L}\p{N}\s]/gu,'').trim()];return (m[0]||'?').toUpperCase()};
+
+async function post(p,b={}){
+  const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'erro'); return j;
+}
+let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
+
+function renderClients(){
+  const q=$('qc').value;
+  const list=clients.filter(c=>match(c.name,q));
+  $('ccount').textContent=clients.length+' online';
+  $('clients').innerHTML=list.map(c=>`<div class="row ${cur&&cur.cldbid===c.cldbid?'sel':''}" data-id="${c.cldbid}"><div class="av" style="background:${color(c.name)}">${esc(ini(c.name))}</div><div class="nm">${esc(c.name)}</div></div>`).join('')||'<div class="empty">Ninguém encontrado</div>';
+  $('clients').querySelectorAll('.row').forEach(el=>el.onclick=()=>pick(clients.find(c=>c.cldbid===el.dataset.id)));
+}
+function renderWho(){
+  $('who').innerHTML=cur?`<div class="av" style="background:${color(cur.name)}">${esc(ini(cur.name))}</div><div><b>${esc(cur.name)}</b><span>${orig.size} grupo(s) atual(is) · ID ${cur.cldbid}</span></div>`:'<div class="empty" style="padding:6px">← Escolha uma pessoa para começar</div>';
+}
+function renderGroups(){
+  const q=$('qg').value;
+  const list=groups.filter(g=>match(g.name,q))
+    .filter(g=>!onlySel||want.has(g.sgid)||orig.has(g.sgid));
+  $('groups').innerHTML=list.slice(0,300).map(g=>{
+    const has=orig.has(g.sgid),w=want.has(g.sgid),L=learned[g.sgid]||{};
+    const hard=has&&noRem.has(g.sgid);
+    const locked=!hard&&(has?L.rem===false:L.add===false); /* aviso, não bloqueia */
+    const badge=hard?'<span class="badge b-lock" title="O servidor não deixa você remover este grupo de ninguém.">🔒 sem permissão p/ remover</span>':locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
+    const sep=g.name.match(/≪(.+?)≫/);
+    if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
+    return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
+  $('groups').querySelectorAll('input').forEach(i=>i.onchange=()=>{i.checked?want.add(i.dataset.id):want.delete(i.dataset.id);update(false)});
+}
+function renderPresets(){
+  $('presets').innerHTML='<label>Presets</label>'+presets.map((p,i)=>`<span class="chip" data-i="${i}" title="Clique: marca os grupos • Shift+clique: apaga">${esc(p.name)}</span>`).join('')+'<span class="chip add" id="addp">+ salvar seleção</span>';
+  $('presets').querySelectorAll('.chip[data-i]').forEach(el=>el.onclick=async e=>{
+    const i=+el.dataset.i,p=presets[i];
+    if(e.shiftKey){presets.splice(i,1);await post('/api/presets',{presets});return renderPresets()}
+    if(!cur) return toast('Escolha uma pessoa primeiro',false);
+    let miss=0;p.names.forEach(n=>{const g=groups.find(g=>norm(g.name)===norm(n));g?want.add(g.sgid):miss++});
+    update();if(miss)toast(miss+' grupo(s) do preset não existem mais',false);
+  });
+  $('addp').onclick=async()=>{
+    if(!cur||!want.size) return toast('Escolha uma pessoa e marque grupos primeiro',false);
+    const name=prompt('Nome do preset:');if(!name)return;
+    presets.push({name,names:[...want].map(id=>groups.find(g=>g.sgid===id).name)});
+    await post('/api/presets',{presets});renderPresets();
+  };
+}
+function diff(){return{add:[...want].filter(x=>!orig.has(x)),rem:[...orig].filter(x=>!want.has(x))}}
+function update(full=true){
+  const d=diff(),n=d.add.length+d.rem.length;
+  $('sum').innerHTML=n?`<b>+${d.add.length}</b> adicionar · <b>−${d.rem.length}</b> remover`:'Nenhuma mudança';
+  $('apply').disabled=!cur||!n;$('reset').disabled=!n;
+  if(full)renderGroups();else renderGroups();
+}
+
+async function probeRemove(){
+  noRem=new Set();
+  if(!cur||!orig.size) return;
+  try{const r=await post('/api/canremove',{sgids:[...orig]});for(const [id,ok] of Object.entries(r.can)) if(!ok) noRem.add(id)}catch(e){}
+}
+async function pick(c){
+  cur=c;
+  try{const r=await post('/api/member',{cldbid:c.cldbid});orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();await probeRemove()}catch(e){toast(e.message,false)}
+  renderGroups();
+}
+async function load(){
+  try{
+    const r=await post('/api/info');learned=r.learned||{};groups=r.groups.sort((a,b)=>a.sortid-b.sortid||(+a.sgid)-(+b.sgid));
+    clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
+    presets=(await post('/api/presets')).presets;
+    $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
+    renderClients();renderPresets();update();
+  }catch(e){$('sub').textContent='Sem conexão';toast(e.message,false)}
+}
+$('only').onchange=e=>{onlySel=e.target.checked;renderGroups()};$('qc').oninput=renderClients;$('qg').oninput=renderGroups;
+/* ao voltar para a janela: atualiza a lista e os grupos da pessoa (se você não tem mudança pendente) */
+let busy=false;
+async function softRefresh(){
+  if(busy||document.hidden) return; busy=true;
+  try{
+    const r=await post('/api/info');learned=r.learned||{};
+    clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
+    $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
+    const clean=cur&&[...want].sort().join()===[...orig].sort().join();
+    if(clean){const m=await post('/api/member',{cldbid:cur.cldbid});orig=new Set(m.sgids);want=new Set(m.sgids);await probeRemove();renderWho()}
+    renderClients();update();
+  }catch(e){}
+  busy=false;
+}
+window.addEventListener('focus',softRefresh);
+document.addEventListener('visibilitychange',softRefresh);
+setInterval(softRefresh,30000);
+$('reload').onclick=async()=>{await post('/api/forget').catch(()=>{});await load();if(cur){const c=clients.find(x=>x.cldbid===cur.cldbid);c?pick(c):(cur=null,renderWho(),update())}};
+$('reset').onclick=()=>{want=new Set(orig);update()};
+$('apply').onclick=async()=>{
+  const d=diff();if(!d.add.length&&!d.rem.length)return;
+  $('apply').disabled=true;
+  try{const r=await post('/api/apply',{cldbid:cur.cldbid,add:d.add,remove:d.rem});
+    learned=r.learned||learned;
+    const nm=id=>(groups.find(g=>g.sgid===id)||{}).name||id;
+    const okN=d.add.length+d.rem.length-(r.failed||[]).length;
+    if(r.ok) toast(`Pronto! +${d.add.length} / −${d.rem.length}`);
+    else toast(`${okN} ok · falhou: `+r.failed.map(f=>`${nm(f.sgid)} (${/2568/.test(f.error)?'sem permissão':f.error.replace(/\(id=.*$/,'')})`).join(', '),false);
+    orig=new Set((await post('/api/member',{cldbid:cur.cldbid})).sgids);want=new Set(orig);await probeRemove();renderWho();update()}
+  catch(e){toast(e.message,false);update()}
+};
+$('cfg').onclick=()=>$('dlg').showModal();
+$('keyno').onclick=()=>$('dlg').close();
+$('keyok').onclick=async()=>{await post('/api/config',{apikey:$('key').value});$('dlg').close();load()};
+setInterval(()=>fetch('/api/ping').catch(()=>{}),3000);fetch('/api/ping').catch(()=>{});
+/* ---- atualização automática pelo GitHub ---- */
+const banner=(t,btn)=>{$('upd').hidden=false;$('updtxt').textContent=t;$('updgo').hidden=!btn};
+async function checkUpdate(manual){
+  try{
+    const c=await post('/api/update/check');
+    if(!c.ok){ if(manual) toast(c.error,false); return }
+    if(!c.available){ if(manual) toast('Você já está na versão mais nova ('+c.current+')'); return }
+    banner('⬇ Baixando a versão '+c.latest+'…',false);
+    const d=await post('/api/update/download');
+    banner('✅ Versão '+d.latest+' pronta'+(c.notes?' — '+c.notes:''),true);
+  }catch(e){ if(manual) toast('Falha ao atualizar: '+e.message,false); else $('upd').hidden=true }
+}
+$('chk').onclick=()=>checkUpdate(true);
+$('updgo').onclick=async()=>{
+  banner('Reiniciando…',false);
+  await post('/api/restart').catch(()=>{});
+  const t0=Date.now();
+  const iv=setInterval(async()=>{ try{ const r=await fetch('/api/status'); if(r.ok&&Date.now()-t0>1500){clearInterval(iv);location.reload()} }catch(e){} },700);
+};
+setTimeout(()=>checkUpdate(false),2500);
+setInterval(()=>checkUpdate(false),6*3600*1000);
+(async()=>{const s=await (await fetch('/api/status')).json();$('ver').textContent='v'+(s.version||'');if(!s.hasKey)$('dlg').showModal();else load()})();
+</script>
+</body>
+</html>

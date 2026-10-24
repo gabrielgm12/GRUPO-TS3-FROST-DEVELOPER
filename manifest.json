@@ -1,0 +1,12 @@
+{
+  "version": "1.2",
+  "notes": "Atualização automática pelo GitHub",
+  "files": {
+    "server.py": "804e45db426bdb2313f8aba42529d66aa3e683197c5278d7b4c8f3d6ee001267",
+    "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
+    "index.html": "cd8baa28822c494612760121cdaf43fd30c4f2fecb1e84568c480d3b8f99c1a6",
+    "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
+    "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
+    "version.txt": "44804414f85bef9588f60086587fd6e8871b39123c831ec129624f4d81a95fea"
+  }
+}

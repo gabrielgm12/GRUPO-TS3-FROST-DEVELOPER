@@ -1,0 +1,15 @@
+# NUNCA subir: chaves e dados pessoais
+config.json
+perms.json
+presets.json
+*.key
+windows/senha.nsh
+# gerados / pesados
+Grupos TS3.app/
+instalador/
+windows/build/
+windows/*.exe
+*.dmg
+*.zip
+__pycache__/
+.DS_Store
