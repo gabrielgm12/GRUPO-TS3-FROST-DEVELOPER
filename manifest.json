@@ -1,12 +1,12 @@
 {
-  "version": "1.5",
-  "notes": "Anti-flood só conta comandos que vão ao servidor (mais rápido, mesma proteção)",
+  "version": "1.6",
+  "notes": "Botão mostra se está atualizado; reinício mais seguro no Windows",
   "files": {
-    "server.py": "0849686088f77cb2112e5651a4441e973959302e13a9855efe8104bb7cb3ddca",
+    "server.py": "968b77fdd154d38fb9f3cecf7fcf3cccb33199432c3bf1b95a8edf962f5f0cea",
     "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
-    "index.html": "f18958567313cf1a2add88ed762ab3740656f1be2f2c68b99b7de786b6039fc5",
+    "index.html": "b8b166b94007017c24a890329e9387ce90fb85e0aa7c9cac4a22adff972f2f43",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "03c76d47c407b24353b3121bd96490373bd6c5de05f6b3d32bd420c4810f1160"
+    "version.txt": "e5cd57eee9635f3612a2a913746f7f794cdb573cc3e16f6b7d8e613f92beac83"
   }
 }

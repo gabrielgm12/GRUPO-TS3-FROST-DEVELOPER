@@ -373,6 +373,10 @@ def restart():
     """Reinicia o próprio servidor (pega a versão baixada em <dados>/current)."""
     os.environ["GRUPOS_BOOT"] = "0"
     os.environ["GRUPOS_NO_BROWSER"] = "1"  # a janela já está aberta; ela recarrega sozinha
+    if WIN:
+        # no Windows o execv não coloca aspas em caminhos com espaço ("Grupos TS3"): abre um novo processo e sai
+        subprocess.Popen([sys.executable] + sys.argv, creationflags=0x08000000)  # CREATE_NO_WINDOW
+        os._exit(0)
     os.execv(sys.executable, [sys.executable] + sys.argv)
 
 

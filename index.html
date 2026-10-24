@@ -104,7 +104,7 @@ footer{background:rgba(8,5,18,.7)}
   <div class="logo">G</div>
   <h1>Grupos TS3 <span id="ver" style="font-size:11px;color:var(--mut);font-weight:600"></span><small id="sub">Conectando…</small></h1>
   <div class="actions">
-    <button class="btn" id="chk" title="Buscar atualização no GitHub">⬆ Atualização</button>
+    <button class="btn" id="chk" title="Verifica no GitHub se há versão nova (não envia nada ao servidor do TeamSpeak)">⬆ Verificar atualização</button>
     <button class="btn" id="reload">↻ Atualizar</button>
     <button class="btn" id="cfg">🔑 API key</button>
   </div>
@@ -143,7 +143,7 @@ footer{background:rgba(8,5,18,.7)}
 
 <script>
 const $=id=>document.getElementById(id);
-let power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -286,8 +286,9 @@ const banner=(t,btn)=>{$('upd').hidden=false;$('updtxt').textContent=t;$('updgo'
 async function checkUpdate(manual){
   try{
     const c=await post('/api/update/check');
-    if(!c.ok){ if(manual) toast(c.error,false); return }
-    if(!c.available){ if(manual) toast('Você já está na versão mais nova ('+c.current+')'); return }
+    if(!c.ok){ $('chk').textContent='⬆ Verificar atualização'; if(manual) toast(c.error,false); return }
+    if(!c.available){ $('chk').textContent='✓ Atualizado (v'+c.current+')'; if(manual) toast('Você já está na versão mais nova ('+c.current+')'); return }
+    if(updating) return; updating=true;
     banner('⬇ Baixando a versão '+c.latest+'…',false);
     const d=await post('/api/update/download');
     banner('✅ Versão '+d.latest+' baixada'+(c.notes?' — '+c.notes:''),true);
@@ -300,6 +301,7 @@ async function checkUpdate(manual){
 }
 $('chk').onclick=()=>checkUpdate(true);
 $('updgo').onclick=async()=>{
+  if($('updgo').dataset.busy) return; $('updgo').dataset.busy='1';
   banner('Reiniciando…',false);
   await post('/api/restart').catch(()=>{});
   const t0=Date.now();
