@@ -84,20 +84,32 @@ def save(path, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# --- proteção contra anti-flood do servidor: o TeamSpeak bane quem manda comandos demais, mesmo sem falar nada ---
-MIN_GAP = 0.7          # segundos entre dois comandos (≈ 85 por minuto no máximo)
-_last_cmd = [0.0]
+# --- proteção contra anti-flood do servidor ---
+# O TeamSpeak dá "pontos" a cada comando; o cliente que passa de um limite é bloqueado/banido por flood, mesmo sem
+# falar nada. Os valores padrão do servidor: perde ~5 pontos/s, bloqueia por volta de 150. Aqui usamos um "balde":
+# cada comando custa pontos, o balde esvazia 4 pontos/s e nunca deixamos passar de 90 (bem abaixo do limite).
+BUCKET_MAX = 90.0
+LEAK_PER_S = 4.0
+COST_LIST = 25.0       # listas grandes (clientlist, servergrouplist, permoverview...)
+COST_CMD = 12.0        # comandos comuns
+_bucket = [0.0, time.time()]
 _cooldown_until = [0.0]
 
 
-def throttle():
+def throttle(text=""):
     now = time.time()
     if now < _cooldown_until[0]:
         raise RuntimeError(f"Pausa de segurança: aguarde {int(_cooldown_until[0] - now) + 1}s (o servidor reclamou de excesso de comandos).")
-    wait = _last_cmd[0] + MIN_GAP - now
-    if wait > 0:
-        time.sleep(wait)
-    _last_cmd[0] = time.time()
+    cost = COST_LIST if text.split(" ")[0] in ("clientlist", "servergrouplist", "permoverview", "servergroupsbyclientid", "whoami") else COST_CMD
+    # esvazia o balde pelo tempo que passou
+    _bucket[0] = max(0.0, _bucket[0] - (now - _bucket[1]) * LEAK_PER_S)
+    _bucket[1] = now
+    over = _bucket[0] + cost - BUCKET_MAX
+    if over > 0:  # espera o balde esvaziar o suficiente
+        time.sleep(over / LEAK_PER_S)
+        _bucket[0] = max(0.0, _bucket[0] - (over / LEAK_PER_S) * LEAK_PER_S)
+        _bucket[1] = time.time()
+    _bucket[0] += cost
 
 
 class TS:
@@ -106,7 +118,7 @@ class TS:
         self.buf = b""
         self._read_until_prompt()
         self.cmd("auth apikey=" + apikey)
-        for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid"):
+        for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid", "notifypermoverview"):
             self.cmd(f"clientnotifyregister schandlerid=1 event={ev}")
 
     def _readline(self):
@@ -134,7 +146,7 @@ class TS:
 
     def cmd(self, text, expect=None):
         """Envia um comando. Com `expect`, o resultado vem numa linha notify<expect>."""
-        throttle()
+        throttle(text)
         self._drain()
         self.s.sendall((text + "\n").encode("utf-8"))
         rows, got = [], []
@@ -198,6 +210,30 @@ def fresh_learned():
     return out
 
 
+def my_power(ts, clients, groups):
+    """Seu poder de adicionar/remover membros, lido do servidor (2 comandos, guardado 10 min).
+    IDs de permissão: 196 = i_group_member_add_power, 198 = i_group_member_remove_power;
+    197/199 são os "necessários" de cada grupo (usados só para conferir que os IDs estão certos)."""
+    def read():
+        who = ts.cmd("whoami")[0]
+        me = next((c for c in clients if c["clid"] == who["clid"]), None)
+        if not me:
+            return None
+        rows = ts.cmd(f"permoverview cldbid={me['client_database_id']} cid={who['cid']} permid=0", "permoverview")
+        rows = [r for r in rows if r.get("t") == "0" and r.get("n") != "1"]
+        by = {}
+        for r in rows:
+            by.setdefault(int(r["p"]), []).append((r["id1"], int(r["v"])))
+        # confere: o "necessário" do grupo (197) tem que bater com o n_member_addp que o servidor lista
+        addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in groups}
+        ok = [v == addp.get(sg) for sg, v in by.get(197, []) if sg in addp]
+        if not ok or not all(ok):
+            return None  # não bate: melhor não bloquear nada do que bloquear errado
+        top = lambda pid: max((v for _, v in by.get(pid, [])), default=None)
+        return {"add": top(196), "rem": top(198), "cldbid": me["client_database_id"]}
+    return cached("power", 600, read)
+
+
 def api(path, body):
     if path == "/api/quit":  # usado pelo instalador para fechar o app antes de atualizar
         threading.Timer(0.3, lambda: os._exit(0)).start()
@@ -228,9 +264,15 @@ def api(path, body):
                 groups = [g for g in groups if g.get("type") in ("1", None)]  # só grupos normais
                 clients = cached("clients", 15, lambda: ts.cmd("clientlist"))
                 clients = [c for c in clients if c.get("client_type") == "0"]
+                try:
+                    power = my_power(ts, clients, groups)
+                except RuntimeError as e:
+                    power = None
                 return {
                     "learned": fresh_learned(),
-                    "groups": [{"sgid": g["sgid"], "name": g["name"], "sortid": int(g.get("sortid") or 0)} for g in groups],
+                    "power": power,
+                    "groups": [{"sgid": g["sgid"], "name": g["name"], "sortid": int(g.get("sortid") or 0),
+                                "addp": int(g.get("n_member_addp") or 0), "remp": int(g.get("n_member_removep") or 0)} for g in groups],
                     "clients": [{"clid": c["clid"], "cldbid": c["client_database_id"],
                                  "name": c["client_nickname"]} for c in clients],
                 }

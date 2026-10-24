@@ -143,7 +143,7 @@ footer{background:rgba(8,5,18,.7)}
 
 <script>
 const $=id=>document.getElementById(id);
-let staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -192,9 +192,11 @@ function renderGroups(){
     .filter(g=>!onlySel||want.has(g.sgid)||orig.has(g.sgid));
   $('groups').innerHTML=list.slice(0,300).map(g=>{
     const has=orig.has(g.sgid),w=want.has(g.sgid),L=learned[g.sgid]||{};
-    const hard=has&&noRem.has(g.sgid);
+    const lackAdd=!has&&power&&power.add!=null&&g.addp>power.add;
+    const lackRem=has&&((power&&power.rem!=null&&g.remp>power.rem)||noRem.has(g.sgid));
+    const hard=lackAdd||lackRem;
     const locked=!hard&&(has?L.rem===false:L.add===false); /* aviso, não bloqueia */
-    const badge=hard?'<span class="badge b-lock" title="O servidor não deixa você remover este grupo de ninguém.">🔒 sem permissão p/ remover</span>':locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
+    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:'Você não tem permissão para remover esta tag.'}">🔒 sem permissão${lackAdd?'':' p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
     return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
@@ -206,8 +208,8 @@ function renderPresets(){
     const i=+el.dataset.i,p=presets[i];
     if(e.shiftKey){presets.splice(i,1);await post('/api/presets',{presets});return renderPresets()}
     if(!cur) return toast('Escolha uma pessoa primeiro',false);
-    let miss=0;p.names.forEach(n=>{const g=groups.find(g=>norm(g.name)===norm(n));g?want.add(g.sgid):miss++});
-    update();if(miss)toast(miss+' grupo(s) do preset não existem mais',false);
+    let miss=0,blocked=0;p.names.forEach(n=>{const g=groups.find(g=>norm(g.name)===norm(n));if(!g)return miss++;if(!orig.has(g.sgid)&&power&&power.add!=null&&g.addp>power.add)return blocked++;want.add(g.sgid)});
+    update();if(miss||blocked)toast((blocked?blocked+' tag(s) sem permissão foram ignoradas. ':'')+(miss?miss+' do preset não existem mais.':''),false);
   });
   $('addp').onclick=async()=>{
     if(!cur||!want.size) return toast('Escolha uma pessoa e marque grupos primeiro',false);
@@ -236,7 +238,7 @@ async function pick(c){
 }
 async function load(){
   try{
-    const r=await post('/api/info');learned=r.learned||{};groups=r.groups.sort((a,b)=>a.sortid-b.sortid||(+a.sgid)-(+b.sgid));
+    const r=await post('/api/info');learned=r.learned||{};power=r.power||null;groups=r.groups.sort((a,b)=>a.sortid-b.sortid||(+a.sgid)-(+b.sgid));
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
     presets=(await post('/api/presets')).presets;
     $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
@@ -249,7 +251,7 @@ let busy=false,lastSoft=0;
 async function softRefresh(){
   if(busy||document.hidden||Date.now()-lastSoft<20000) return; busy=true;lastSoft=Date.now();
   try{
-    const r=await post('/api/info');learned=r.learned||{};
+    const r=await post('/api/info');learned=r.learned||{};power=r.power||power;
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
     $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
     const clean=cur&&[...want].sort().join()===[...orig].sort().join();
