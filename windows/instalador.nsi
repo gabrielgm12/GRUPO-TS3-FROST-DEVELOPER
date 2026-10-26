@@ -1,7 +1,7 @@
 ﻿; Instalador do Grupos TS3 (Windows) - instalar / atualizar / corrigir / desinstalar
 Unicode true
 !define NOME "Grupos TS3"
-!define VERSAO "1.6"
+!define VERSAO "1.7"
 !include "senha.nsh"   ; define SENHA (arquivo fora do GitHub)
 !define REG "Software\Microsoft\Windows\CurrentVersion\Uninstall\GruposTS3"
 
@@ -223,7 +223,7 @@ FunctionEnd
 
 ; pede para o app fechar (para os arquivos nao ficarem travados)
 Function FechaApp
-  nsExec::Exec 'powershell -NoProfile -WindowStyle Hidden -Command "try{Invoke-WebRequest -Uri http://127.0.0.1:8765/api/quit -Method POST -Body {} -UseBasicParsing -TimeoutSec 3}catch{}"'
+  nsExec::Exec `powershell -NoProfile -WindowStyle Hidden -Command "try{Invoke-WebRequest -Uri http://127.0.0.1:8765/api/quit -Method POST -Body {} -Headers @{'X-Requested-With'='gts3'} -UseBasicParsing -TimeoutSec 3}catch{}"`
   Pop $0
   Sleep 1500
 FunctionEnd

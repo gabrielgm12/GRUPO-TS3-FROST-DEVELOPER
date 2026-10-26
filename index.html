@@ -143,7 +143,7 @@ footer{background:rgba(8,5,18,.7)}
 
 <script>
 const $=id=>document.getElementById(id);
-let updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -171,7 +171,7 @@ const color=s=>{let h=0;for(const c of s)h=(h*31+c.codePointAt(0))%360;return `h
 const ini=s=>{const m=[...s.replace(/[^\p{L}\p{N}\s]/gu,'').trim()];return (m[0]||'?').toUpperCase()};
 
 async function post(p,b={}){
-  const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  const r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'gts3'},body:JSON.stringify(b)});
   const j=await r.json(); if(!r.ok) throw new Error(j.error||'erro'); return j;
 }
 let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
@@ -190,17 +190,27 @@ function renderGroups(){
   const q=$('qg').value;
   const list=groups.filter(g=>match(g.name,q))
     .filter(g=>!onlySel||want.has(g.sgid)||orig.has(g.sgid));
-  $('groups').innerHTML=list.slice(0,300).map(g=>{
+  $('groups').innerHTML=list.map(g=>{
     const has=orig.has(g.sgid),w=want.has(g.sgid),L=learned[g.sgid]||{};
     const lackAdd=!has&&power&&power.add!=null&&g.addp>power.add;
     const lackRem=has&&((power&&power.rem!=null&&g.remp>power.rem)||noRem.has(g.sgid));
+    const onlyAdd=!has&&w&&noRemLater.has(g.sgid);   // vai conseguir adicionar, mas não vai conseguir tirar depois
     const hard=lackAdd||lackRem;
     const locked=!hard&&(has?L.rem===false:L.add===false); /* aviso, não bloqueia */
-    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:'Você não tem permissão para remover esta tag.'}">🔒 sem permissão${lackAdd?'':' p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
+    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:'Você não tem permissão para remover esta tag.'}">🔒 ${lackAdd?'sem permissão':'só adicionar — não dá p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="O servidor não vai deixar você remover esta tag depois.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
     return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
-  $('groups').querySelectorAll('input').forEach(i=>i.onchange=()=>{i.checked?want.add(i.dataset.id):want.delete(i.dataset.id);update(false)});
+  $('groups').querySelectorAll('input').forEach(i=>i.onchange=async()=>{
+    const id=i.dataset.id;
+    i.checked?want.add(id):(want.delete(id),noRemLater.delete(id));
+    update(false);
+    if(i.checked&&!orig.has(id)&&!noRemLater.has(id)){
+      try{const r=await post('/api/canremove',{sgids:[id]});
+        if(r.can[id]===false&&want.has(id)){noRemLater.add(id);renderGroups();
+          toast('⚠ Você consegue adicionar esta tag, mas NÃO vai conseguir remover depois.',false)}}catch(e){}
+    }
+  });
 }
 function renderPresets(){
   $('presets').innerHTML='<label>Presets</label>'+presets.map((p,i)=>`<span class="chip" data-i="${i}" title="Clique: marca os grupos • Shift+clique: apaga">${esc(p.name)}</span>`).join('')+'<span class="chip add" id="addp">+ salvar seleção</span>';
@@ -226,14 +236,30 @@ function update(full=true){
   if(full)renderGroups();else renderGroups();
 }
 
-async function probeRemove(){
+async function probeRemove(token){
   noRem=new Set();
   if(!cur||!orig.size) return;
-  try{const r=await post('/api/canremove',{sgids:[...orig]});for(const [id,ok] of Object.entries(r.can)) if(!ok) noRem.add(id)}catch(e){}
+  // só pergunta ao servidor pelas tags que a regra de poder ainda não bloqueou
+  const todo=[...orig].filter(id=>{const g=groups.find(x=>x.sgid===id);return !(g&&power&&power.rem!=null&&g.remp>power.rem)});
+  for(let k=0;k<todo.length;k+=3){
+    if(token!==undefined&&token!==pickToken) return;      // você já trocou de pessoa
+    try{const r=await post('/api/canremove',{sgids:todo.slice(k,k+3)});
+      for(const [id,ok] of Object.entries(r.can)) if(ok===false) noRem.add(id);
+      renderGroups();
+    }catch(e){ if(/Pausa de seguran/.test(e.message)) toast(e.message,false); return }
+  }
 }
 async function pick(c){
-  cur=c;
-  try{const r=await post('/api/member',{cldbid:c.cldbid});orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();await probeRemove()}catch(e){toast(e.message,false)}
+  const token=++pickToken;                                // evita mostrar os grupos da pessoa errada se você clicar rápido
+  cur=c;noRem=new Set();noRemLater=new Set();
+  try{
+    const r=await post('/api/member',{cldbid:c.cldbid});
+    if(token!==pickToken) return;
+    orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();
+    $('sub').textContent='verificando permissões…';
+    await probeRemove(token);
+    if(token===pickToken) $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
+  }catch(e){toast(e.message,false)}
   renderGroups();
 }
 async function load(){
@@ -255,7 +281,7 @@ async function softRefresh(){
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
     $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
     const clean=cur&&[...want].sort().join()===[...orig].sort().join();
-    if(clean){const m=await post('/api/member',{cldbid:cur.cldbid});orig=new Set(m.sgids);want=new Set(m.sgids);await probeRemove();renderWho()}
+    if(clean){const m=await post('/api/member',{cldbid:cur.cldbid});orig=new Set(m.sgids);want=new Set(m.sgids);noRemLater=new Set();await probeRemove(pickToken);renderWho()}
     renderClients();update();
   }catch(e){}
   busy=false;
@@ -267,6 +293,11 @@ $('reload').onclick=async()=>{await post('/api/forget').catch(()=>{});await load
 $('reset').onclick=()=>{want=new Set(orig);update()};
 $('apply').onclick=async()=>{
   const d=diff();if(!d.add.length&&!d.rem.length)return;
+  const sem=d.add.filter(id=>noRemLater.has(id));
+  if(sem.length){
+    const nomes=sem.map(id=>(groups.find(g=>g.sgid===id)||{}).name||id).join('\n• ');
+    if(!confirm('Você NÃO terá permissão para remover estas tags depois de adicionar:\n\n• '+nomes+'\n\nQuer adicionar mesmo assim?')) return;
+  }
   $('apply').disabled=true;
   try{const r=await post('/api/apply',{cldbid:cur.cldbid,add:d.add,remove:d.rem});
     learned=r.learned||learned;
@@ -274,7 +305,7 @@ $('apply').onclick=async()=>{
     const okN=d.add.length+d.rem.length-(r.failed||[]).length;
     if(r.ok) toast(`Pronto! +${d.add.length} / −${d.rem.length}`);
     else toast(`${okN} ok · falhou: `+r.failed.map(f=>`${nm(f.sgid)} (${/2568/.test(f.error)?'sem permissão':f.error.replace(/\(id=.*$/,'')})`).join(', '),false);
-    orig=new Set((await post('/api/member',{cldbid:cur.cldbid})).sgids);want=new Set(orig);await probeRemove();renderWho();update();if(staged)setTimeout(()=>$('updgo').click(),2500)}
+    orig=new Set((await post('/api/member',{cldbid:cur.cldbid})).sgids);want=new Set(orig);noRemLater=new Set();renderWho();update();await probeRemove(pickToken);if(staged)setTimeout(()=>$('updgo').click(),2500)}
   catch(e){toast(e.message,false);update()}
 };
 $('cfg').onclick=()=>$('dlg').showModal();
@@ -297,7 +328,7 @@ async function checkUpdate(manual){
     const pending=cur&&[...want].sort().join()!==[...orig].sort().join();
     if(!pending) setTimeout(()=>$('updgo').click(),1200);
     else banner('✅ Versão '+d.latest+' baixada — vai reiniciar quando você terminar (ou clique ao lado)',true);
-  }catch(e){ if(manual) toast('Falha ao atualizar: '+e.message,false); else $('upd').hidden=true }
+  }catch(e){ updating=false; if(manual) toast('Falha ao atualizar: '+e.message,false); else $('upd').hidden=true }
 }
 $('chk').onclick=()=>checkUpdate(true);
 $('updgo').onclick=async()=>{

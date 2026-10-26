@@ -1,12 +1,12 @@
 {
-  "version": "1.6",
-  "notes": "Botão mostra se está atualizado; reinício mais seguro no Windows",
+  "version": "1.7",
+  "notes": "Avisa antes de adicionar tag que não dá para remover; lista completa; proteção contra sites maliciosos; menos comandos ao servidor",
   "files": {
-    "server.py": "968b77fdd154d38fb9f3cecf7fcf3cccb33199432c3bf1b95a8edf962f5f0cea",
+    "server.py": "e71bcd4780c1e085f594f516bac7e20505f9d260430e32e2f5e40fc52de624c6",
     "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
-    "index.html": "b8b166b94007017c24a890329e9387ce90fb85e0aa7c9cac4a22adff972f2f43",
+    "index.html": "6c84ff12f2c5a677ec9b770e9b327a4f79a91032018382808c2fa19c397fb5da",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "e5cd57eee9635f3612a2a913746f7f794cdb573cc3e16f6b7d8e613f92beac83"
+    "version.txt": "2894c5729307b0246d73c17758d6394fe47087f69a25a0f8351810387663dac5"
   }
 }

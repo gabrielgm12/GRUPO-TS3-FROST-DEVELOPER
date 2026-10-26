@@ -268,6 +268,9 @@ def api(path, body):
                 groups = [g for g in groups if g.get("type") in ("1", None)]  # só grupos normais
                 clients = cached("clients", 15, lambda: ts.cmd("clientlist"))
                 clients = [c for c in clients if c.get("client_type") == "0"]
+                if not clients:
+                    _cache.clear()
+                    raise RuntimeError("O TeamSpeak não está conectado a um servidor.")
                 try:
                     power = my_power(ts, clients, groups)
                 except RuntimeError as e:
@@ -296,16 +299,32 @@ def api(path, body):
                     except RuntimeError as e:
                         if "Pausa de seguran" in str(e):
                             raise
-                        return "id=2568" not in str(e)
+                        if "id=2568" in str(e):
+                            return False   # sem permissão (confirmado pelo servidor)
+                        return None        # outro erro: não dá para afirmar nada (não trava nem libera)
                 # a permissão é do grupo, não da pessoa: guarda 15 min para não repetir comandos
-                return {"can": {sgid: cached("rem" + sgid, 900, lambda sg=sgid: probe(sg)) for sgid in body.get("sgids", [])}}
+                out = {}
+                for sgid in body.get("sgids", [])[:5]:   # no máximo 5 por chamada (não segura o painel)
+                    v = cached("rem" + sgid, 900, lambda sg=sgid: probe(sg))
+                    if v is None:
+                        _cache.pop("rem" + sgid, None)
+                    out[sgid] = v
+                return {"can": out}
             if path == "/api/apply":
                 cldbid, add, rem = body["cldbid"], body.get("add", []), body.get("remove", [])
                 errors, learned, failed = [], load(LEARNED, {}), []
+                power = _cache.get("power", (0, None))[1]
+                addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in (_cache.get("groups", (0, []))[1] or [])}
                 for sgids, verb, key in ((add, "servergroupaddclient", "add"), (rem, "servergroupdelclient", "rem")):
                     for sgid in sgids:
                         entry = learned.setdefault(sgid, {})
                         entry.setdefault("t", {})
+                        known_no = (key == "add" and power and power.get("add") is not None and addp.get(sgid, 0) > power["add"]) or \
+                                   (key == "rem" and _cache.get("rem" + sgid, (0, None))[1] is False)
+                        if known_no:
+                            failed.append({"sgid": sgid, "action": key, "error": "insufficient client permissions (id=2568) [bloqueado antes de enviar]"})
+                            errors.append(f"{key} {sgid}: sem permissão")
+                            continue
                         try:
                             ts.cmd(f"{verb} sgid={sgid} cldbid={cldbid}")
                             entry[key] = True
@@ -317,7 +336,7 @@ def api(path, body):
                             errors.append(f"{key} {sgid}: {e}")
                         entry["t"][key] = time.time()
                 save(LEARNED, learned)
-                _cache.clear()
+                _cache.pop("clients", None)   # permissões não mudam ao aplicar: mantém o cache para não repetir comandos
                 return {"ok": not errors, "errors": errors, "failed": failed, "learned": fresh_learned()}
         except (OSError, ConnectionError):
             _conn[0] = None  # reconecta na próxima
@@ -356,9 +375,15 @@ class H(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
-        # proteção: só aceita chamadas feitas pela própria página local
+        # proteção: só aceita chamadas feitas pela própria página local (impede que um site aberto no navegador
+        # mande comandos para o painel): Host local, Origin (se houver) local e cabeçalho próprio obrigatório
         if self.headers.get("Host", "").split(":")[0] not in ("127.0.0.1", "localhost"):
             return self._send(403, {"error": "host inválido"})
+        origin = self.headers.get("Origin")
+        if origin and origin not in (URL, "http://localhost:8765"):
+            return self._send(403, {"error": "origem não permitida"})
+        if self.headers.get("X-Requested-With") != "gts3":
+            return self._send(403, {"error": "cabeçalho ausente"})
         n = int(self.headers.get("Content-Length") or 0)
         try:
             body = json.loads(self.rfile.read(n) or b"{}")
