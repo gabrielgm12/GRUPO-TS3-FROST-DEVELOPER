@@ -290,37 +290,22 @@ def api(path, body):
                 rows = ts.cmd("servergroupsbyclientid cldbid=" + body["cldbid"], "servergroupsbyclientid")
                 return {"sgids": [r["sgid"] for r in rows]}
             if path == "/api/canremove":
-                # Teste sem efeito colateral: tenta remover de um ID que não existe. O servidor checa a permissão
-                # ANTES de procurar o cliente, então "2568" = sem permissão; qualquer outro erro = tem permissão.
-                def probe(sgid):
-                    try:
-                        ts.cmd(f"servergroupdelclient sgid={sgid} cldbid=2000000000")
-                        return True
-                    except RuntimeError as e:
-                        if "Pausa de seguran" in str(e):
-                            raise
-                        if "id=2568" in str(e):
-                            return False   # sem permissão (confirmado pelo servidor)
-                        return None        # outro erro: não dá para afirmar nada (não trava nem libera)
-                # a permissão é do grupo, não da pessoa: guarda 15 min para não repetir comandos
-                out = {}
-                for sgid in body.get("sgids", [])[:5]:   # no máximo 5 por chamada (não segura o painel)
-                    v = cached("rem" + sgid, 900, lambda sg=sgid: probe(sg))
-                    if v is None:
-                        _cache.pop("rem" + sgid, None)
-                    out[sgid] = v
-                return {"can": out}
+                # descontinuado: o teste com ID inexistente dava falso "sem permissão". A regra de poder
+                # (seu poder x o que a tag exige, vindo do servidor) é usada no lugar, sem comandos extras.
+                return {"can": {sgid: None for sgid in body.get("sgids", [])}}
             if path == "/api/apply":
                 cldbid, add, rem = body["cldbid"], body.get("add", []), body.get("remove", [])
                 errors, learned, failed = [], load(LEARNED, {}), []
                 power = _cache.get("power", (0, None))[1]
-                addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in (_cache.get("groups", (0, []))[1] or [])}
+                glist = _cache.get("groups", (0, []))[1] or []
+                addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in glist}
+                remp = {g["sgid"]: int(g.get("n_member_removep") or 0) for g in glist}
                 for sgids, verb, key in ((add, "servergroupaddclient", "add"), (rem, "servergroupdelclient", "rem")):
                     for sgid in sgids:
                         entry = learned.setdefault(sgid, {})
                         entry.setdefault("t", {})
                         known_no = (key == "add" and power and power.get("add") is not None and addp.get(sgid, 0) > power["add"]) or \
-                                   (key == "rem" and _cache.get("rem" + sgid, (0, None))[1] is False)
+                                   (key == "rem" and power and power.get("rem") is not None and remp.get(sgid, 0) > power["rem"])
                         if known_no:
                             failed.append({"sgid": sgid, "action": key, "error": "insufficient client permissions (id=2568) [bloqueado antes de enviar]"})
                             errors.append(f"{key} {sgid}: sem permissão")

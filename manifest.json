@@ -1,12 +1,12 @@
 {
-  "version": "1.7",
-  "notes": "Avisa antes de adicionar tag que não dá para remover; lista completa; proteção contra sites maliciosos; menos comandos ao servidor",
+  "version": "1.8",
+  "notes": "Corrige falso 'sem permissão p/ remover': usa só a regra de poder (igual ao TS3), sem teste por comando",
   "files": {
-    "server.py": "e71bcd4780c1e085f594f516bac7e20505f9d260430e32e2f5e40fc52de624c6",
+    "server.py": "6e2bd28788b3b5563d843f683a92d3f3c3440698fdcc02981774a2eb8374be03",
     "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
-    "index.html": "6c84ff12f2c5a677ec9b770e9b327a4f79a91032018382808c2fa19c397fb5da",
+    "index.html": "a64d06f7edf1cfcf17e44654c31beb6756c6adb1476fdc3584c90862fe2b03b6",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "2894c5729307b0246d73c17758d6394fe47087f69a25a0f8351810387663dac5"
+    "version.txt": "d2e181481b9515797bc42f282b122d2529d24ea985125bd5c95ded5004e0c7c9"
   }
 }

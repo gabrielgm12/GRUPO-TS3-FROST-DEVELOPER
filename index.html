@@ -193,23 +193,18 @@ function renderGroups(){
   $('groups').innerHTML=list.map(g=>{
     const has=orig.has(g.sgid),w=want.has(g.sgid),L=learned[g.sgid]||{};
     const lackAdd=!has&&power&&power.add!=null&&g.addp>power.add;
-    const lackRem=has&&((power&&power.rem!=null&&g.remp>power.rem)||noRem.has(g.sgid));
-    const onlyAdd=!has&&w&&noRemLater.has(g.sgid);   // vai conseguir adicionar, mas não vai conseguir tirar depois
+    const lackRem=has&&power&&power.rem!=null&&g.remp>power.rem;
+    const onlyAdd=!has&&w&&power&&power.rem!=null&&g.remp>power.rem;   // vai conseguir adicionar, mas não vai conseguir tirar depois
     const hard=lackAdd||lackRem;
     const locked=!hard&&(has?L.rem===false:L.add===false); /* aviso, não bloqueia */
-    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:'Você não tem permissão para remover esta tag.'}">🔒 ${lackAdd?'sem permissão':'só adicionar — não dá p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="O servidor não vai deixar você remover esta tag depois.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
+    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:'Você não tem permissão para remover esta tag.'}">🔒 ${lackAdd?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
     return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
   $('groups').querySelectorAll('input').forEach(i=>i.onchange=async()=>{
     const id=i.dataset.id;
-    i.checked?want.add(id):(want.delete(id),noRemLater.delete(id));
+    i.checked?want.add(id):want.delete(id);
     update(false);
-    if(i.checked&&!orig.has(id)&&!noRemLater.has(id)){
-      try{const r=await post('/api/canremove',{sgids:[id]});
-        if(r.can[id]===false&&want.has(id)){noRemLater.add(id);renderGroups();
-          toast('⚠ Você consegue adicionar esta tag, mas NÃO vai conseguir remover depois.',false)}}catch(e){}
-    }
   });
 }
 function renderPresets(){
@@ -236,19 +231,7 @@ function update(full=true){
   if(full)renderGroups();else renderGroups();
 }
 
-async function probeRemove(token){
-  noRem=new Set();
-  if(!cur||!orig.size) return;
-  // só pergunta ao servidor pelas tags que a regra de poder ainda não bloqueou
-  const todo=[...orig].filter(id=>{const g=groups.find(x=>x.sgid===id);return !(g&&power&&power.rem!=null&&g.remp>power.rem)});
-  for(let k=0;k<todo.length;k+=3){
-    if(token!==undefined&&token!==pickToken) return;      // você já trocou de pessoa
-    try{const r=await post('/api/canremove',{sgids:todo.slice(k,k+3)});
-      for(const [id,ok] of Object.entries(r.can)) if(ok===false) noRem.add(id);
-      renderGroups();
-    }catch(e){ if(/Pausa de seguran/.test(e.message)) toast(e.message,false); return }
-  }
-}
+async function probeRemove(){ noRem=new Set(); }   // não pergunta mais ao servidor: usa a regra de poder
 async function pick(c){
   const token=++pickToken;                                // evita mostrar os grupos da pessoa errada se você clicar rápido
   cur=c;noRem=new Set();noRemLater=new Set();
@@ -256,9 +239,7 @@ async function pick(c){
     const r=await post('/api/member',{cldbid:c.cldbid});
     if(token!==pickToken) return;
     orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();
-    $('sub').textContent='verificando permissões…';
-    await probeRemove(token);
-    if(token===pickToken) $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
+    
   }catch(e){toast(e.message,false)}
   renderGroups();
 }
@@ -293,7 +274,7 @@ $('reload').onclick=async()=>{await post('/api/forget').catch(()=>{});await load
 $('reset').onclick=()=>{want=new Set(orig);update()};
 $('apply').onclick=async()=>{
   const d=diff();if(!d.add.length&&!d.rem.length)return;
-  const sem=d.add.filter(id=>noRemLater.has(id));
+  const sem=d.add.filter(id=>{const g=groups.find(x=>x.sgid===id);return g&&power&&power.rem!=null&&g.remp>power.rem});
   if(sem.length){
     const nomes=sem.map(id=>(groups.find(g=>g.sgid===id)||{}).name||id).join('\n• ');
     if(!confirm('Você NÃO terá permissão para remover estas tags depois de adicionar:\n\n• '+nomes+'\n\nQuer adicionar mesmo assim?')) return;
