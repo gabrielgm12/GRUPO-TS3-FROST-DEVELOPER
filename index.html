@@ -99,6 +99,8 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:320px 1fr;gap:16px;p
 .b-add{background:rgba(96,165,250,.16);color:var(--sky)}
 .b-rem{background:rgba(248,113,113,.14);color:var(--bad)}
 .b-lock{background:rgba(248,113,113,.14);color:var(--bad)}
+.permbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 16px 0;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:rgba(251,191,36,.06);font-size:12px;color:var(--mut)}
+.permbar b{color:var(--txt)}.permbar .btn{padding:5px 10px;font-size:12px}.permbar .grow{flex:1;min-width:160px}
 .b-unk{background:rgba(251,191,36,.12);color:var(--warn)}
 
 /* rodapé do painel */
@@ -147,6 +149,7 @@ dialog p{color:var(--mut);line-height:1.5}
   <section class="card">
     <div class="who" id="who"><div class="empty" style="padding:6px">← Escolha uma pessoa para começar</div></div>
     <div class="chips" id="presets"></div>
+    <div class="permbar" id="permbar" hidden></div>
     <div style="display:flex;align-items:center"><div class="search" style="flex:1"><input id="qg" placeholder="Buscar grupo… (pode digitar normal: supervisor, vip, staff)"></div><label class="tog"><input type="checkbox" id="only"> só marcados</label></div>
     <div class="list" id="groups"></div>
     <footer>
@@ -234,6 +237,7 @@ function renderClients(){
 function renderWho(){
   $('who').innerHTML=cur?`<div class="av" style="background:${color(cur.name)}">${esc(ini(cur.name))}</div><div><b>${esc(cur.name)}</b><span>${orig.size} grupo(s) atual(is) · ID ${cur.cldbid}</span>${tlock()?`<span style="color:var(--bad);font-weight:600">🔒 Você não tem poder para alterar esta pessoa (ela exige ${tneed}; o seu é ${power.cpm})</span>`:''}</div>`:'<div class="empty" style="padding:6px">← Escolha uma pessoa para começar</div>';
 }
+let scanRun=false,scanStop=false,scanN=0,scanTotal=0;
 const inq=new Set(),semTeste=new Set();let queue=[],running=false,io=null;
 function enqueueVisible(){
   if(power||!cur) return;
@@ -257,6 +261,42 @@ async function runQueue(){
     if(it.token===pickToken){const st=$('groups').scrollTop;renderGroups(true);$('groups').scrollTop=st}
   }
   probing=false;running=false;setSub();update();
+}
+function permStats(){let total=0,known=0,blocked=0;
+  for(const g of groups){ if(/≪.+≫/.test(g.name)) continue;
+    for(const key of ['add','rem']){const need=key==='add'?g.addp:g.remp; if(!need) continue; total++;
+      const L=learned[g.sgid]||{},v=key==='add'?L.add:L.rem; if(v!==undefined){known++; if(v===false) blocked++}}}
+  return {total,known,blocked};
+}
+function scanTasks(){const t=[];
+  for(const key of ['add','rem']) for(const g of groups){ if(/≪.+≫/.test(g.name)) continue;
+    const need=key==='add'?g.addp:g.remp,L=learned[g.sgid]||{},v=key==='add'?L.add:L.rem;
+    if(need>0&&v===undefined&&!semTeste.has(g.sgid+key)) t.push({g,key})}
+  return t;
+}
+function renderPermBar(){
+  const el=$('permbar'); if(power||!groups.length){el.hidden=true;return} el.hidden=false;
+  const st=permStats(),pend=scanTasks().length,min=Math.max(1,Math.ceil(pend*3.75/60));
+  el.innerHTML=`<span class="grow">🔐 Permissões salvas neste PC: <b>${st.known}</b> de <b>${st.total}</b> verificadas (<b>${st.blocked}</b> bloqueadas)</span>`+
+    (scanRun?`<button class="btn" id="scango">⏹ Parar (${scanN}/${scanTotal})</button>`:(pend?`<button class="btn pri" id="scango" title="Testa uma vez todas as tags e guarda o resultado neste PC. Depois fica instantâneo.">🔍 Verificar todas (até ~${min} min)</button>`:''))+
+    `<button class="btn" id="recheck" ${scanRun?'disabled':''} title="Use depois de ser promovido (ou rebaixado): testa de novo as tags bloqueadas. Shift+clique refaz TODAS.">↻ Reverificar bloqueadas</button>`;
+  const go=$('scango'); if(go) go.onclick=scanAll;
+  $('recheck').onclick=async e=>{
+    try{const r=await post('/api/recheck',{all:e.shiftKey});learned=r.learned||{};semTeste.clear();
+      renderGroups();renderPermBar();toast(e.shiftKey?'Tudo será verificado de novo':'Tags bloqueadas serão testadas de novo');scanAll()}catch(err){toast(err.message,false)}};
+}
+async function scanAll(){
+  if(scanRun){scanStop=true;return}
+  const tasks=scanTasks(); if(!tasks.length){toast('Tudo já foi verificado');return}
+  scanRun=true;scanStop=false;scanN=0;scanTotal=tasks.length;renderPermBar();
+  for(const it of tasks){
+    if(scanStop) break;
+    await canDo(it.g,it.key); scanN++;
+    if(scanN%4===0){const st=$('groups').scrollTop;renderGroups(true);$('groups').scrollTop=st}
+    renderPermBar();
+  }
+  scanRun=false;const st=$('groups').scrollTop;renderGroups(true);$('groups').scrollTop=st;renderPermBar();
+  toast(scanStop?'Verificação parada (o que já foi testado ficou salvo)':'Pronto! Permissões verificadas e salvas neste PC');
 }
 function renderGroups(keep){
   const q=$('qg').value;
@@ -286,7 +326,7 @@ function renderGroups(keep){
     if(ok===false){toast(`Sem permissão para ${key==='add'?'adicionar':'remover'} “${g.name}”`,false);renderGroups();update();return}
     on?want.add(id):want.delete(id);update(false);
   });
-  if(!keep||!io) enqueueVisible(); else enqueueVisible();
+  enqueueVisible();renderPermBar();
 }
 function renderPresets(){
   $('presets').innerHTML='<label>Presets</label>'+presets.map((p,i)=>`<span class="chip" data-i="${i}" title="Clique: marca os grupos • Shift+clique: apaga">${esc(p.name)}</span>`).join('')+'<span class="chip add" id="addp">+ salvar seleção</span>';

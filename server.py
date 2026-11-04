@@ -232,7 +232,7 @@ def cached(key, ttl, fn):
     return val
 
 
-LEARN_TTL = 6 * 3600  # segundos; o botão ↻ Atualizar apaga antes (as permissões podem ter mudado)
+LEARN_TTL = 365 * 24 * 3600  # fica salvo no PC; o botão 'Reverificar' refaz quando a pessoa for promovida
 
 
 def LEARNED_path():
@@ -245,7 +245,12 @@ def set_srvkey(ts):
         nome = (ts.cmd("servervariable virtualserver_name") or [{}])[0].get("virtualserver_name") or ""
     except RuntimeError:
         nome = ""
-    _srvkey[0] = hashlib.sha1(nome.encode("utf-8")).hexdigest()[:10]
+    try:   # as permissões são de cada CONTA: quem usa outra conta no mesmo PC não herda o resultado
+        who = ts.cmd("whoami")[0]
+        eu = next((c["client_database_id"] for c in ts.cmd("clientlist") if c.get("clid") == who.get("clid")), "")
+    except (RuntimeError, IndexError, KeyError):
+        eu = ""
+    _srvkey[0] = hashlib.sha1((nome + "|" + eu).encode("utf-8")).hexdigest()[:10]
 
 
 def fresh_learned():
@@ -314,8 +319,7 @@ def api(path, body):
         threading.Timer(0.4, restart).start()
         return {"ok": True}
     if path == "/api/forget":
-        save(LEARNED_path(), {})
-        _cache.clear()
+        _cache.clear()      # só a memória temporária; as permissões verificadas continuam salvas
         return {"ok": True}
     if path == "/api/config":
         save(CONFIG, {"apikey": body.get("apikey", "").strip()})
@@ -452,6 +456,22 @@ def api(path, body):
                         feitos += 1
                         tentar("servergroupaddclient", g, mem[0], f"ADICIONAR(membro) nivel {k}")
                 return {"report": "\n".join(L)}
+            if path == "/api/recheck":
+                # pessoa foi promovida (ou rebaixada): esquece o que foi verificado para testar de novo
+                todas = bool(body.get("all"))
+                learned = load(LEARNED_path(), {})
+                for sg in list(learned):
+                    v = learned[sg]
+                    for k in ("add", "rem"):
+                        if k in v and (todas or v[k] is False):
+                            v.pop(k, None)
+                            v.get("t", {}).pop(k, None)
+                    if not any(k in v for k in ("add", "rem")):
+                        del learned[sg]
+                save(LEARNED_path(), learned)
+                for k in [k for k in _cache if k in ("power", "groups", "clients") or k.startswith(("target:", "mine:", "members:"))]:
+                    _cache.pop(k, None)
+                return {"learned": fresh_learned()}
             if path == "/api/target":
                 cldbid = str(body.get("cldbid", ""))
                 if not cldbid.isdigit():

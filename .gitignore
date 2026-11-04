@@ -15,3 +15,5 @@ __pycache__/
 .DS_Store
 servidor.json
 perms-*.json
+permids-*.json
+servidor.json
