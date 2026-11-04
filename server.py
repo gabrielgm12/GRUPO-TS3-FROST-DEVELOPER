@@ -35,6 +35,7 @@ import updater
 VERSION = updater.read_version(HERE)
 CONFIG = os.path.join(DATA, "config.json")
 PRESETS = os.path.join(DATA, "presets.json")
+SERVER_FILE = os.path.join(DATA, "servidor.json")  # nome do servidor escolhido
 LEARNED = os.path.join(DATA, "perms.json")  # {sgid: {"add": bool, "rem": bool}} aprendido nas tentativas
 LOCK = threading.Lock()
 
@@ -121,10 +122,24 @@ class TS:
         self.s = socket.create_connection(("127.0.0.1", 25639), timeout=5)
         self.buf = b""
         self.sch = "1"
+        self.reg = set()
         self._read_until_prompt()
         self.cmd("auth apikey=" + apikey)
+        self.register()
+
+    def register(self):
+        # registrar de novo um evento já registrado faz o TS3 não responder: só uma vez por servidor
+        if self.sch in self.reg:
+            return
+        self.reg.add(self.sch)
         for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid", "notifypermoverview"):
             self.cmd(f"clientnotifyregister schandlerid={self.sch} event={ev}")
+
+    def use(self, sch):
+        """Escolhe em qual servidor (aba do TeamSpeak) os comandos valem."""
+        self.cmd(f"use schandlerid={sch}")
+        self.sch = str(sch)
+        self.register()
 
     def _readline(self):
         while b"\n" not in self.buf:
@@ -182,6 +197,7 @@ class TS:
 
 
 _conn = [None]
+_sel = [None]   # servidor (schandlerid) escolhido no painel
 
 
 def ts_session():
@@ -190,6 +206,11 @@ def ts_session():
         if not cfg.get("apikey"):
             raise RuntimeError("API key não configurada")
         _conn[0] = TS(cfg["apikey"])
+        if _sel[0]:
+            try:
+                _conn[0].use(_sel[0])
+            except RuntimeError:
+                _sel[0] = None
     return _conn[0]
 
 
@@ -291,6 +312,38 @@ def api(path, body):
                     "clients": [{"clid": c["clid"], "cldbid": c["client_database_id"],
                                  "name": c["client_nickname"]} for c in clients],
                 }
+            if path == "/api/servers":
+                out = []
+                for h in ts.cmd("serverconnectionhandlerlist"):
+                    sch = h.get("schandlerid")
+                    if not sch:
+                        continue
+                    try:
+                        ts.use(sch)
+                        nome = (ts.cmd("servervariable virtualserver_name") or [{}])[0].get("virtualserver_name") or ""
+                    except RuntimeError:
+                        continue  # aba sem conexão com servidor
+                    if nome:
+                        out.append({"sch": sch, "name": nome})
+                saved = load(SERVER_FILE, {}).get("name")
+                pick = next((o for o in out if o["sch"] == _sel[0]), None) or next((o for o in out if o["name"] == saved), None)
+                asked = pick is None and len(out) > 1   # vários servidores e nenhum escolhido ainda
+                pick = pick or (out[0] if out else None)
+                if pick:
+                    _sel[0] = pick["sch"]
+                    ts.use(pick["sch"])
+                return {"servers": out, "selected": _sel[0], "choose": asked}
+            if path == "/api/server/select":
+                sch = str(body.get("sch", ""))
+                if not sch.isdigit():
+                    raise RuntimeError("dados inválidos")
+                ts.use(sch)
+                _sel[0] = sch
+                nome = (ts.cmd("servervariable virtualserver_name") or [{}])[0].get("virtualserver_name") or ""
+                save(SERVER_FILE, {"name": nome})
+                _cache.clear()
+                save(LEARNED, {})
+                return {"ok": True}
             if path == "/api/find":
                 rows = ts.cmd("clientdbfind pattern=%" + esc(body["pattern"]) + "%")
                 return {"clients": [{"cldbid": r["cldbid"], "name": r.get("client_nickname", "?")} for r in rows]}

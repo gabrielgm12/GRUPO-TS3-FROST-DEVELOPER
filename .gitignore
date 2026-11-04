@@ -13,3 +13,4 @@ windows/*.exe
 *.zip
 __pycache__/
 .DS_Store
+servidor.json

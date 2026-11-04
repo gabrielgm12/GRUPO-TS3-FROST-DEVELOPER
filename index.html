@@ -45,6 +45,9 @@ body>*:not(dialog):not(#toast){position:relative;z-index:1}
 .btn.pri:hover{filter:brightness(1.1)}
 .btn:disabled{opacity:.4;cursor:default;box-shadow:none;filter:none;transform:none}
 
+select.btn{max-width:210px;padding-right:8px}select.btn[hidden]{display:none}
+select.btn option{background:#120c22;color:#f6f1ff}
+
 /* layout */
 main{flex:1;min-height:0;display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px 24px 20px}
 @media(max-width:820px){main{grid-template-columns:1fr}}
@@ -124,6 +127,7 @@ dialog p{color:var(--mut);line-height:1.5}
   <div class="logo">G</div>
   <h1>Grupos TS3 <span id="ver"></span><small id="sub">Conectando…</small></h1>
   <div class="actions">
+    <select id="srv" class="btn" hidden title="Servidor do TeamSpeak"></select>
     <button class="btn" id="chk" title="Verifica no GitHub se há versão nova (não envia nada ao servidor do TeamSpeak)">⬆ Verificar atualização</button>
     <button class="btn" id="reload">↻ Atualizar</button>
     <button class="btn" id="cfg">🔑 API key</button>
@@ -163,7 +167,7 @@ dialog p{color:var(--mut);line-height:1.5}
 
 <script>
 const $=id=>document.getElementById(id);
-let powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let servers=[],powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -272,8 +276,21 @@ async function pick(c){
   }catch(e){toast(e.message,false)}
   renderGroups();
 }
+async function loadServers(){
+  try{
+    const r=await post('/api/servers');servers=r.servers||[];
+    const el=$('srv');el.hidden=servers.length<2;
+    if(r.choose)toast('Você tem mais de um servidor aberto: escolha o seu no topo',false);
+    el.innerHTML=servers.map(s=>`<option value="${esc(s.sch)}" ${s.sch===r.selected?'selected':''}>${esc(s.name)}</option>`).join('');
+  }catch(e){}
+}
+$('srv').onchange=async e=>{
+  try{await post('/api/server/select',{sch:e.target.value});cur=null;orig=new Set();want=new Set();renderWho();await load();toast('Servidor trocado')}
+  catch(err){toast(err.message,false)}
+};
 async function load(){
   try{
+    await loadServers();
     const r=await post('/api/info');learned=r.learned||{};power=r.power||null;powerErr=r.powerErr||'';groups=r.groups.sort((a,b)=>a.sortid-b.sortid||(+a.sgid)-(+b.sgid));
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
     presets=(await post('/api/presets')).presets;

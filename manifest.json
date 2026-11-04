@@ -1,12 +1,12 @@
 {
-  "version": "1.11",
-  "notes": "Painel com visual novo e CSS reorganizado",
+  "version": "1.12",
+  "notes": "Escolha do servidor do TeamSpeak quando há mais de um aberto (corrige ler o servidor errado); lembra a escolha",
   "files": {
-    "server.py": "9a3dc650668a99e95f72df7e3152bd0830ab267d79127e4c39ef796890b1dbed",
+    "server.py": "8da0416b1f871aa86886e52e0b6826d9fe5db0f4927dc9ea7bb9da9712189777",
     "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
-    "index.html": "0f7fbbec96ac9a903d27e4fcb9e5e261b4342dadb364f64c4cd4038d3a7ddcd0",
+    "index.html": "1e695408200f6366e94ec2f5c0181e2a0e7cde7a646f31b0a7bdd0cccf590b55",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "582f149887973349c8799a31ea4e7d78b7bb10810cd657410ffe9209b0027e4b"
+    "version.txt": "470042422a0c23a09e69ff4ec57284b5b160caa643424e9e33cc39ed09ab7e2b"
   }
 }
