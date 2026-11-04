@@ -185,7 +185,9 @@ class TS:
                 if e.get("id") != "0":
                     if "flood" in (e.get("msg", "") + e.get("extra_msg", "")).lower() or e.get("id") in ("524", "3329"):
                         _cooldown_until[0] = time.time() + 90
-                    raise RuntimeError(f"{e.get('msg', 'erro')} (id={e.get('id')}) {e.get('extra_msg', '')}".strip())
+                    ex = RuntimeError(f"{e.get('msg', 'erro')} (id={e.get('id')}) {e.get('extra_msg', '')}".strip())
+                    ex.raw = line
+                    raise ex
                 return got if expect else rows
             rows.extend(parse(p) for p in line.split("|"))
 
@@ -373,9 +375,10 @@ def api(path, body):
                 return {"can": {sgid: None for sgid in body.get("sgids", [])}}
             if path == "/api/diag":
                 # relatório para diagnóstico (só leitura + testes sem efeito). Texto simples para copiar e colar.
-                cldbid, have = str(body.get("cldbid", "")), {str(x) for x in body.get("have", [])}
-                if not cldbid.isdigit() or not all(x.isdigit() for x in have):
+                cldbid = str(body.get("cldbid", ""))
+                if not cldbid.isdigit():
                     raise RuntimeError("Escolha uma pessoa na lista antes de rodar o diagnóstico.")
+                have = {r["sgid"] for r in ts.cmd("servergroupsbyclientid cldbid=" + cldbid, "servergroupsbyclientid")}  # sempre fresco
                 L = [f"app v{VERSION} | servidor schandlerid={ts.sch} chave={_srvkey[0]}"]
                 glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 gn = [g for g in glist if g.get("type") in ("1", None)]
@@ -387,28 +390,51 @@ def api(path, body):
                     L.append(f"poder lido do servidor: {my_power(ts, clist, gn)}")
                 except RuntimeError as e:
                     L.append(f"leitura do poder FALHOU: {e}")
-                for key, verb, field, ok in (("remover", "servergroupdelclient", "n_member_removep", "2563"),
-                                             ("adicionar", "servergroupaddclient", "n_member_addp", "2561")):
-                    pool = sorted([g for g in gn if int(g.get(field) or 0) > 0 and ((g["sgid"] in have) == (key == "adicionar"))],
-                                  key=lambda g: int(g.get(field) or 0))
-                    if not pool:
-                        L.append(f"teste {key}: sem grupo adequado para testar (pessoa escolhida tem {len(have)} grupo(s))")
+                nm = lambda g: g.get("name", "?")[:28]
+                L.append(f"pessoa escolhida (cldbid {cldbid}) está em {len(have)} grupo(s): {sorted(have)[:12]}")
+
+                def tentar(verb, g, alvo, rotulo):
+                    try:
+                        ts.cmd(f"{verb} sgid={g['sgid']} cldbid={alvo}")
+                        r = "SEM ERRO (!)"
+                    except RuntimeError as e:
+                        r = getattr(e, "raw", str(e))
+                    L.append(f"{rotulo} | grupo {g['sgid']} '{nm(g)}' | alvo {alvo} -> {r}")
+
+                def amostra(pool, field):
+                    por_nivel = {}
+                    for g in sorted(pool, key=lambda g: int(g.get(field) or 0)):
+                        por_nivel.setdefault(int(g.get(field) or 0), g)
+                    ks = sorted(por_nivel)
+                    pick = ks if len(ks) <= 8 else [ks[i * (len(ks) - 1) // 7] for i in range(8)]
+                    return [(k, por_nivel[k]) for k in pick]
+
+                for k, g in amostra([g for g in gn if int(g.get("n_member_removep") or 0) > 0 and g["sgid"] not in have], "n_member_removep"):
+                    tentar("servergroupdelclient", g, cldbid, f"REMOVER nivel {k}")
+                for k, g in amostra([g for g in gn if int(g.get("n_member_addp") or 0) > 0 and g["sgid"] in have], "n_member_addp"):
+                    tentar("servergroupaddclient", g, cldbid, f"ADICIONAR(ja esta) nivel {k}")
+                feitos = 0
+                for k, g in amostra([g for g in gn if int(g.get("n_member_addp") or 0) > 0 and g["sgid"] not in have], "n_member_addp"):
+                    if feitos >= 4:
+                        break
+                    try:
+                        mem = ts.cmd(f"servergroupclientlist sgid={g['sgid']}", "servergroupclientlist")
+                    except RuntimeError as e:
+                        L.append(f"lista de membros do grupo {g['sgid']} -> {getattr(e, 'raw', e)}")
                         continue
-                    for g in {pool[0]["sgid"]: pool[0], pool[len(pool) // 2]["sgid"]: pool[len(pool) // 2], pool[-1]["sgid"]: pool[-1]}.values():
-                        try:
-                            ts.cmd(f"{verb} sgid={g['sgid']} cldbid={cldbid}")
-                            r = "SEM ERRO (!)"
-                        except RuntimeError as e:
-                            r = str(e)
-                        L.append(f"teste {key} | grupo {g['sgid']} (exige {g.get(field)}) -> {r}")
+                    mem = [m["cldbid"] for m in mem if m.get("cldbid", "").isdigit()]
+                    if mem:
+                        feitos += 1
+                        tentar("servergroupaddclient", g, mem[0], f"ADICIONAR(membro) nivel {k}")
                 return {"report": "\n".join(L)}
             if path == "/api/probe":
                 # Servidor não deixa ler as permissões: descobre o poder com comandos SEM efeito, por busca binária.
                 #  remover: grupo em que a pessoa NÃO está   -> 2563 (permitido) ou 2568 (sem permissão)
                 #  adicionar: grupo em que a pessoa JÁ está  -> 2561 (permitido) ou 2568 (sem permissão)
-                cldbid, have = str(body.get("cldbid", "")), {str(x) for x in body.get("have", [])}
-                if not cldbid.isdigit() or not all(x.isdigit() for x in have):
+                cldbid = str(body.get("cldbid", ""))
+                if not cldbid.isdigit():
                     raise RuntimeError("dados inválidos")
+                have = {r["sgid"] for r in ts.cmd("servergroupsbyclientid cldbid=" + cldbid, "servergroupsbyclientid")}  # sempre fresco
                 glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 glist = [g for g in glist if g.get("type") in ("1", None)]
                 learned = load(LEARNED_path(), {})
