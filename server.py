@@ -186,7 +186,7 @@ class TS:
                 if e.get("id") != "0":
                     if "flood" in (e.get("msg", "") + e.get("extra_msg", "")).lower() or e.get("id") in ("524", "3329"):
                         _cooldown_until[0] = time.time() + 90
-                    ex = RuntimeError(f"{e.get('msg', 'erro')} (id={e.get('id')}) {e.get('extra_msg', '')}".strip())
+                    ex = RuntimeError(f"{e.get('msg', 'erro')} (id={e.get('id')}){' permid=' + e['failed_permid'] if e.get('failed_permid') else ''} {e.get('extra_msg', '')}".strip())
                     ex.raw = line
                     raise ex
                 return got if expect else rows
@@ -460,13 +460,27 @@ def api(path, body):
                     return {"ok": known[action], "learned": fresh_learned()}
                 verdict = None
                 try:
-                    mem = cached("members:" + sgid, 300, lambda: ts.cmd(f"servergroupclientlist sgid={sgid}", "servergroupclientlist"))
-                    mem = {m["cldbid"] for m in mem if m.get("cldbid", "").isdigit()}
-                    if action == "add":
-                        target = next(iter(mem), None)
+                    me = None
+                    try:
+                        who = ts.cmd("whoami")[0]
+                        cl = cached("clients", 15, lambda: ts.cmd("clientlist"))
+                        me = next((c["client_database_id"] for c in cl if c["clid"] == who["clid"]), None)
+                    except (RuntimeError, KeyError, IndexError):
+                        me = None
+                    mine = None
+                    if me:
+                        mine = cached("mine:" + me, 300, lambda: frozenset(r["sgid"] for r in ts.cmd("servergroupsbyclientid cldbid=" + me, "servergroupsbyclientid")))
+                    target = None
+                    if me and mine is not None and ((action == "add" and sgid in mine) or (action == "rem" and sgid not in mine)):
+                        target = me      # você mesmo serve de alvo: nada muda (já é membro / não é membro)
                     else:
-                        clist = [c["client_database_id"] for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
-                        target = next((c for c in [cldbid] + clist if c not in mem), None)
+                        mem = cached("members:" + sgid, 300, lambda: ts.cmd(f"servergroupclientlist sgid={sgid}", "servergroupclientlist"))
+                        mem = {m["cldbid"] for m in mem if m.get("cldbid", "").isdigit()}
+                        if action == "add":
+                            target = next(iter(mem), None)
+                        else:
+                            clist = [c["client_database_id"] for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
+                            target = next((c for c in [cldbid] + clist if c not in mem), None)
                     if target:
                         verb = "servergroupaddclient" if action == "add" else "servergroupdelclient"
                         try:
