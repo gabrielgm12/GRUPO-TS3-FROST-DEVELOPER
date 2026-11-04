@@ -1,12 +1,12 @@
 {
-  "version": "1.10",
-  "notes": "Mostra seu poder (ou o erro ao ler); sem ler o poder, bloqueia tags que o servidor já recusou",
+  "version": "1.11",
+  "notes": "Painel com visual novo e CSS reorganizado",
   "files": {
     "server.py": "9a3dc650668a99e95f72df7e3152bd0830ab267d79127e4c39ef796890b1dbed",
     "updater.py": "d78e01cdb14c663c485fbdbb9f3387a6b02001533e682176b46bee77a5ea6631",
-    "index.html": "94400b37d61e60aef9f470eccb81f8d1961c5e552ed19e9b175e110c577927a8",
+    "index.html": "0f7fbbec96ac9a903d27e4fcb9e5e261b4342dadb364f64c4cd4038d3a7ddcd0",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "abbc1dfa005442cde25131e583640f0259dfabc4fd0b8c43690f6e5ebb872609"
+    "version.txt": "582f149887973349c8799a31ea4e7d78b7bb10810cd657410ffe9209b0027e4b"
   }
 }
