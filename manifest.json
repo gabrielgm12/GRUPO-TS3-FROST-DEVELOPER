@@ -1,12 +1,12 @@
 {
-  "version": "1.19",
-  "notes": "Atualização mais robusta no Windows (troca arquivo a arquivo com reversão), log de falhas e Diagnóstico com dados da atualização",
+  "version": "1.20",
+  "notes": "Servidor local não se fecha mais com a janela minimizada (Failed to fetch); verificação de permissões em segundo plano e mais rápida",
   "files": {
-    "server.py": "217c3310930575ef04f7e9a7039e7b530047677cd0c42190921526039895c2d3",
-    "updater.py": "f2a3bcde3b2015e7f916f419056ca8d1edbc3a9a48253bf9049d1e09f81b899f",
-    "index.html": "ddc0806bfa6e24dc8d8a48ee6c0e543508c27d42189226393a3165c63fb00acb",
+    "server.py": "5e3e580084bd5a1c183f7ca89f5859fac118c6982f54b9519f260c431022ffdc",
+    "updater.py": "e1d3d8e89b059064166e11f6e1cd3af8e09495d63eef9500283a48920974a35b",
+    "index.html": "3849a914b890cce4771188646c14b7d024c92d00cfa469c99347e74063682ea9",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "9a2aeb9e8dc23cf73946a8214e853a7a9cd6c151551b9e05f6569256ab7c799c"
+    "version.txt": "9d43f2e64ae6d648a28c87c07c62f4f584a278c2d83f06bd09fe69b5539b858f"
   }
 }

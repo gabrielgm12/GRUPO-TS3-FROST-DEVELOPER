@@ -11,6 +11,7 @@ WIN = os.name == "nt"
 DATA = os.environ.get("GRUPOS_DATA") or (os.path.join(os.environ.get("APPDATA", HERE), "GruposTS3") if WIN else HERE)
 URL = "http://127.0.0.1:8765"
 last_ping = [0.0]
+bye = [0.0]   # a página avisa quando é fechada (pagehide)
 os.makedirs(DATA, exist_ok=True)
 sys.path.insert(0, HERE)
 
@@ -218,6 +219,7 @@ def ts_session():
 
 
 _cache = {}
+_seen = {}   # cldbid -> (quando, grupos) lidos há pouco
 
 
 def cached(key, ttl, fn):
@@ -385,6 +387,7 @@ def api(path, body):
                 if not str(body.get("cldbid", "")).isdigit():
                     raise RuntimeError("dados inválidos")
                 rows = ts.cmd("servergroupsbyclientid cldbid=" + body["cldbid"], "servergroupsbyclientid")
+                _seen[str(body["cldbid"])] = (time.time(), {r["sgid"] for r in rows})
                 return {"sgids": [r["sgid"] for r in rows]}
             if path == "/api/canremove":
                 # descontinuado: o teste com ID inexistente dava falso "sem permissão". A regra de poder
@@ -451,11 +454,15 @@ def api(path, body):
                 cldbid = str(body.get("cldbid", ""))
                 if not cldbid.isdigit():
                     raise RuntimeError("dados inválidos")
-                have = {r["sgid"] for r in ts.cmd("servergroupsbyclientid cldbid=" + cldbid, "servergroupsbyclientid")}  # sempre fresco
+                seen = _seen.get(cldbid)
+                if seen and time.time() - seen[0] < 20:    # acabou de ser lido ao escolher a pessoa
+                    have = set(seen[1])
+                else:
+                    have = {r["sgid"] for r in ts.cmd("servergroupsbyclientid cldbid=" + cldbid, "servergroupsbyclientid")}
                 glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 glist = [g for g in glist if g.get("type") in ("1", None)]
                 learned = load(LEARNED_path(), {})
-                budget, lists = 10, 6
+                budget, lists = 8, 4
                 for key, verb, field, okid in (("rem", "servergroupdelclient", "n_member_removep", "2563"),
                                                ("add", "servergroupaddclient", "n_member_addp", "2561")):
                     need = lambda g: int(g.get(field) or 0)
@@ -567,6 +574,9 @@ class H(BaseHTTPRequestHandler):
         if urlparse(self.path).path == "/api/ping":
             last_ping[0] = time.time()
             return self._send(200, {"ok": True})
+        if urlparse(self.path).path == "/api/bye":   # janela fechando (ou recarregando: o próximo ping cancela)
+            bye[0] = time.time()
+            return self._send(200, {"ok": True})
         if urlparse(self.path).path == "/icon.png":
             with open(os.path.join(HERE, "icon.png"), "rb") as f:
                 return self._send(200, f.read(), "image/png")
@@ -587,6 +597,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(403, {"error": "origem não permitida"})
         if self.headers.get("X-Requested-With") != "gts3":
             return self._send(403, {"error": "cabeçalho ausente"})
+        last_ping[0] = time.time()
         n = int(self.headers.get("Content-Length") or 0)
         try:
             body = json.loads(self.rfile.read(n) or b"{}")
@@ -623,13 +634,18 @@ def open_window():
 
 
 def watchdog():
-    """Fecha o servidor quando a janela do app é fechada (a página manda um 'ping' a cada 3 s)."""
+    """Fecha o servidor quando a janela do app é fechada. O navegador desacelera os timers de janelas minimizadas/em
+    segundo plano (1 ping por minuto), então só a falta de ping NÃO derruba o servidor rápido (3 min); quem fecha
+    rápido é o aviso 'bye' da página, que um novo ping (recarregar) cancela."""
     start = time.time()
     while True:
         time.sleep(3)
-        if last_ping[0] and time.time() - last_ping[0] > 15:
+        now = time.time()
+        if last_ping[0] and now - last_ping[0] > 180:
             os._exit(0)
-        if not last_ping[0] and time.time() - start > 120:
+        if bye[0] and last_ping[0] < bye[0] and now - bye[0] > 8:
+            os._exit(0)
+        if not last_ping[0] and now - start > 120:
             os._exit(0)
 
 
@@ -646,7 +662,7 @@ if __name__ == "__main__":
             open_window()
         sys.exit(0)
     print("Painel em " + URL + "  (Ctrl+C para sair)")
-    if WIN:
+    if WIN or os.environ.get("GRUPOS_TESTE_WATCHDOG"):
         threading.Thread(target=watchdog, daemon=True).start()
     if not os.environ.get("GRUPOS_NO_BROWSER"):
         threading.Timer(0.5, open_window).start()

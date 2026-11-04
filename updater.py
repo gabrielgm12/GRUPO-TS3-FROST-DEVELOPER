@@ -94,7 +94,7 @@ def _base():
     try:
         req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/commits/{BRANCH}",
                                      headers={**HEADERS, "Accept": "application/vnd.github+json"})
-        with urllib.request.urlopen(req, timeout=8) as r:
+        with urllib.request.urlopen(req, timeout=4) as r:
             sha = json.loads(r.read().decode("utf-8")).get("sha", "")
         if re.fullmatch(r"[0-9a-f]{40}", sha):
             return f"https://raw.githubusercontent.com/{REPO}/{sha}/", "commit " + sha[:7]
@@ -102,7 +102,7 @@ def _base():
         erros.append("API " + (str(getattr(e, "code", "")) or e.__class__.__name__))
     try:
         req = urllib.request.Request(f"https://github.com/{REPO}/commits/{BRANCH}.atom", headers=HEADERS)
-        with urllib.request.urlopen(req, timeout=8) as r:
+        with urllib.request.urlopen(req, timeout=4) as r:
             m = re.search(r"Grit::Commit/([0-9a-f]{40})", r.read(200000).decode("utf-8", "replace"))
         if m:
             return f"https://raw.githubusercontent.com/{REPO}/{m.group(1)}/", "commit " + m.group(1)[:7]
