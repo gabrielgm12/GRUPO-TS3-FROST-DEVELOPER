@@ -120,10 +120,11 @@ class TS:
     def __init__(self, apikey):
         self.s = socket.create_connection(("127.0.0.1", 25639), timeout=5)
         self.buf = b""
+        self.sch = "1"
         self._read_until_prompt()
         self.cmd("auth apikey=" + apikey)
         for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid", "notifypermoverview"):
-            self.cmd(f"clientnotifyregister schandlerid=1 event={ev}")
+            self.cmd(f"clientnotifyregister schandlerid={self.sch} event={ev}")
 
     def _readline(self):
         while b"\n" not in self.buf:
@@ -145,7 +146,9 @@ class TS:
     def _read_until_prompt(self):
         # banner do ClientQuery termina com "selected schandlerid=..."
         while True:
-            if self._readline().startswith("selected schandlerid"):
+            ln = self._readline()
+            if ln.startswith("selected schandlerid"):
+                self.sch = ln.split("=", 1)[1].strip() or "1"
                 return
 
     def cmd(self, text, expect=None):
@@ -198,7 +201,8 @@ def cached(key, ttl, fn):
     if hit and time.time() - hit[0] < ttl:
         return hit[1]
     val = fn()
-    _cache[key] = (time.time(), val)
+    if val is not None:
+        _cache[key] = (time.time(), val)
     return val
 
 
@@ -215,26 +219,25 @@ def fresh_learned():
 
 
 def my_power(ts, clients, groups):
-    """Seu poder de adicionar/remover membros, lido do servidor (2 comandos, guardado 10 min).
-    IDs de permissão: 196 = i_group_member_add_power, 198 = i_group_member_remove_power;
-    197/199 são os "necessários" de cada grupo (usados só para conferir que os IDs estão certos)."""
+    """Seu poder de adicionar/remover membros, lido do servidor pelo NOME da permissão (os IDs numéricos mudam de
+    servidor para servidor). Permissão do próprio cliente (t=1) vale mais que a dos grupos (t=0); entre grupos vale o maior.
+    Sem nenhuma linha = poder 0. Se a leitura falhar devolve None (e não guarda no cache)."""
     def read():
         who = ts.cmd("whoami")[0]
         me = next((c for c in clients if c["clid"] == who["clid"]), None)
         if not me:
             return None
-        rows = ts.cmd(f"permoverview cldbid={me['client_database_id']} cid={who['cid']} permid=0", "permoverview")
-        rows = [r for r in rows if r.get("t") == "0" and r.get("n") != "1"]
-        by = {}
-        for r in rows:
-            by.setdefault(int(r["p"]), []).append((r["id1"], int(r["v"])))
-        # confere: o "necessário" do grupo (197) tem que bater com o n_member_addp que o servidor lista
-        addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in groups}
-        ok = [v == addp.get(sg) for sg, v in by.get(197, []) if sg in addp]
-        if not ok or not all(ok):
-            return None  # não bate: melhor não bloquear nada do que bloquear errado
-        top = lambda pid: max((v for _, v in by.get(pid, [])), default=None)
-        return {"add": top(196), "rem": top(198), "cldbid": me["client_database_id"]}
+
+        def val(name):
+            rows = ts.cmd(f"permoverview cldbid={me['client_database_id']} cid={who['cid']} permsid={name}", "permoverview")
+            rows = [r for r in rows if r.get("v") not in (None, "")]
+            own = [int(r["v"]) for r in rows if r.get("t") == "1"]
+            if own:
+                return max(own)
+            grp = [int(r["v"]) for r in rows if r.get("t") == "0" and r.get("n") != "1"]
+            return max(grp, default=0)
+        return {"add": val("i_group_member_add_power"), "rem": val("i_group_member_remove_power"),
+                "cldbid": me["client_database_id"]}
     return cached("power", 600, read)
 
 
@@ -251,6 +254,7 @@ def api(path, body):
         return {"ok": True}
     if path == "/api/forget":
         save(LEARNED, {})
+        _cache.clear()
         return {"ok": True}
     if path == "/api/config":
         save(CONFIG, {"apikey": body.get("apikey", "").strip()})
@@ -287,6 +291,8 @@ def api(path, body):
                 rows = ts.cmd("clientdbfind pattern=%" + esc(body["pattern"]) + "%")
                 return {"clients": [{"cldbid": r["cldbid"], "name": r.get("client_nickname", "?")} for r in rows]}
             if path == "/api/member":
+                if not str(body.get("cldbid", "")).isdigit():
+                    raise RuntimeError("dados inválidos")
                 rows = ts.cmd("servergroupsbyclientid cldbid=" + body["cldbid"], "servergroupsbyclientid")
                 return {"sgids": [r["sgid"] for r in rows]}
             if path == "/api/canremove":
@@ -294,10 +300,18 @@ def api(path, body):
                 # (seu poder x o que a tag exige, vindo do servidor) é usada no lugar, sem comandos extras.
                 return {"can": {sgid: None for sgid in body.get("sgids", [])}}
             if path == "/api/apply":
-                cldbid, add, rem = body["cldbid"], body.get("add", []), body.get("remove", [])
+                cldbid, add, rem = str(body["cldbid"]), body.get("add", []), body.get("remove", [])
+                if not cldbid.isdigit() or not all(str(x).isdigit() for x in list(add) + list(rem)):
+                    raise RuntimeError("dados inválidos")
+                add, rem = [str(x) for x in add], [str(x) for x in rem]
                 errors, learned, failed = [], load(LEARNED, {}), []
-                power = _cache.get("power", (0, None))[1]
-                glist = _cache.get("groups", (0, []))[1] or []
+                glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
+                glist = [g for g in glist if g.get("type") in ("1", None)]
+                clist = [c for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
+                try:
+                    power = my_power(ts, clist, glist)
+                except RuntimeError:
+                    power = None
                 addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in glist}
                 remp = {g["sgid"]: int(g.get("n_member_removep") or 0) for g in glist}
                 for sgids, verb, key in ((add, "servergroupaddclient", "add"), (rem, "servergroupdelclient", "rem")):

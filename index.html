@@ -223,7 +223,9 @@ function renderPresets(){
     await post('/api/presets',{presets});renderPresets();
   };
 }
-function diff(){return{add:[...want].filter(x=>!orig.has(x)),rem:[...orig].filter(x=>!want.has(x))}}
+function blockedAdd(id){const g=groups.find(x=>x.sgid===id);return !!(g&&power&&power.add!=null&&g.addp>power.add)}
+function blockedRem(id){const g=groups.find(x=>x.sgid===id);return !!(g&&power&&power.rem!=null&&g.remp>power.rem)}
+function diff(){return{add:[...want].filter(x=>!orig.has(x)&&!blockedAdd(x)),rem:[...orig].filter(x=>!want.has(x)&&!blockedRem(x))}}
 function update(full=true){
   const d=diff(),n=d.add.length+d.rem.length;
   $('sum').innerHTML=n?`<b>+${d.add.length}</b> adicionar · <b>−${d.rem.length}</b> remover`:'Nenhuma mudança';
@@ -235,6 +237,7 @@ async function probeRemove(){ noRem=new Set(); }   // não pergunta mais ao serv
 async function pick(c){
   const token=++pickToken;                                // evita mostrar os grupos da pessoa errada se você clicar rápido
   cur=c;noRem=new Set();noRemLater=new Set();
+  orig=new Set();want=new Set();renderClients();renderWho();update();   // limpa já: nunca aplica a seleção da pessoa anterior
   try{
     const r=await post('/api/member',{cldbid:c.cldbid});
     if(token!==pickToken) return;
