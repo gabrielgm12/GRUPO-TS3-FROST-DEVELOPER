@@ -14,3 +14,4 @@ windows/*.exe
 __pycache__/
 .DS_Store
 servidor.json
+perms-*.json

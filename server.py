@@ -36,7 +36,7 @@ VERSION = updater.read_version(HERE)
 CONFIG = os.path.join(DATA, "config.json")
 PRESETS = os.path.join(DATA, "presets.json")
 SERVER_FILE = os.path.join(DATA, "servidor.json")  # nome do servidor escolhido
-LEARNED = os.path.join(DATA, "perms.json")  # {sgid: {"add": bool, "rem": bool}} aprendido nas tentativas
+_srvkey = ["x"]  # identifica o servidor escolhido (as recusas aprendidas valem só para ele)
 LOCK = threading.Lock()
 
 ESC = [("\\", "\\\\"), ("/", "\\/"), (" ", "\\s"), ("|", "\\p"), ("\n", "\\n"), ("\t", "\\t")]
@@ -211,6 +211,7 @@ def ts_session():
                 _conn[0].use(_sel[0])
             except RuntimeError:
                 _sel[0] = None
+        set_srvkey(_conn[0])
     return _conn[0]
 
 
@@ -227,12 +228,25 @@ def cached(key, ttl, fn):
     return val
 
 
-LEARN_TTL = 600  # segundos: depois disso o app tenta de novo (as permissões podem ter mudado)
+LEARN_TTL = 6 * 3600  # segundos; o botão ↻ Atualizar apaga antes (as permissões podem ter mudado)
+
+
+def LEARNED_path():
+    return os.path.join(DATA, f"perms-{_srvkey[0]}.json")  # {sgid: {add, rem, t}} aprendido nas tentativas
+
+
+def set_srvkey(ts):
+    import hashlib
+    try:
+        nome = (ts.cmd("servervariable virtualserver_name") or [{}])[0].get("virtualserver_name") or ""
+    except RuntimeError:
+        nome = ""
+    _srvkey[0] = hashlib.sha1(nome.encode("utf-8")).hexdigest()[:10]
 
 
 def fresh_learned():
     now, out = time.time(), {}
-    for sgid, v in load(LEARNED, {}).items():
+    for sgid, v in load(LEARNED_path(), {}).items():
         keep = {k: x for k, x in v.items() if k != "t" and now - v.get("t", {}).get(k, 0) < LEARN_TTL}
         if keep:
             out[sgid] = keep
@@ -274,7 +288,7 @@ def api(path, body):
         threading.Timer(0.4, restart).start()
         return {"ok": True}
     if path == "/api/forget":
-        save(LEARNED, {})
+        save(LEARNED_path(), {})
         _cache.clear()
         return {"ok": True}
     if path == "/api/config":
@@ -332,6 +346,7 @@ def api(path, body):
                 if pick:
                     _sel[0] = pick["sch"]
                     ts.use(pick["sch"])
+                    set_srvkey(ts)
                 return {"servers": out, "selected": _sel[0], "choose": asked}
             if path == "/api/server/select":
                 sch = str(body.get("sch", ""))
@@ -342,7 +357,7 @@ def api(path, body):
                 nome = (ts.cmd("servervariable virtualserver_name") or [{}])[0].get("virtualserver_name") or ""
                 save(SERVER_FILE, {"name": nome})
                 _cache.clear()
-                save(LEARNED, {})
+                set_srvkey(ts)
                 return {"ok": True}
             if path == "/api/find":
                 rows = ts.cmd("clientdbfind pattern=%" + esc(body["pattern"]) + "%")
@@ -361,7 +376,7 @@ def api(path, body):
                 if not cldbid.isdigit() or not all(str(x).isdigit() for x in list(add) + list(rem)):
                     raise RuntimeError("dados inválidos")
                 add, rem = [str(x) for x in add], [str(x) for x in rem]
-                errors, learned, failed = [], load(LEARNED, {}), []
+                errors, learned, failed = [], load(LEARNED_path(), {}), []
                 glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 glist = [g for g in glist if g.get("type") in ("1", None)]
                 clist = [c for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
@@ -391,7 +406,7 @@ def api(path, body):
                             failed.append({"sgid": sgid, "action": key, "error": str(e)})
                             errors.append(f"{key} {sgid}: {e}")
                         entry["t"][key] = time.time()
-                save(LEARNED, learned)
+                save(LEARNED_path(), learned)
                 _cache.pop("clients", None)   # permissões não mudam ao aplicar: mantém o cache para não repetir comandos
                 return {"ok": not errors, "errors": errors, "failed": failed, "learned": fresh_learned()}
         except (OSError, ConnectionError):

@@ -201,10 +201,18 @@ async function post(p,b={}){
 let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
 
 function setSub(){
-  const p=power?` · seu poder: +${power.add} / −${power.rem}`:' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':'');
+  const p=power?` · seu poder: +${power.add} / −${power.rem}`:(/2568/.test(powerErr)?' · ⚠ este servidor não deixa você ver suas permissões: tags só são bloqueadas depois que o servidor recusa':' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':''));
   $('sub').textContent=`${clients.length} online · ${groups.length} grupos`+p;
 }
 function learnedNo(g,has){const L=learned[g.sgid]||{};return has?L.rem===false:L.add===false}
+/* sem ler o poder: se o servidor recusou uma tag que exige N, qualquer tag que exija N ou mais também será recusada */
+function inferNo(g,has){
+  if(learnedNo(g,has)) return true;
+  const need=has?g.remp:g.addp; if(!need) return false;
+  for(const id in learned){const o=groups.find(x=>x.sgid===id);if(!o)continue;
+    const n=has?o.remp:o.addp; if(n&&n<=need&&(has?learned[id].rem===false:learned[id].add===false)) return true}
+  return false;
+}
 function renderClients(){
   const q=$('qc').value;
   const list=clients.filter(c=>match(c.name,q));
@@ -224,7 +232,7 @@ function renderGroups(){
     const lackAdd=!has&&power&&power.add!=null&&g.addp>power.add;
     const lackRem=has&&power&&power.rem!=null&&g.remp>power.rem;
     const onlyAdd=!has&&w&&power&&power.rem!=null&&g.remp>power.rem;   // vai conseguir adicionar, mas não vai conseguir tirar depois
-    const hardL=!power&&learnedNo(g,has);   /* sem ler o poder: confia na recusa do servidor */
+    const hardL=!power&&inferNo(g,has);   /* sem ler o poder: confia na recusa do servidor */
     const hard=lackAdd||lackRem||hardL;
     const locked=!hard&&learnedNo(g,has); /* aviso, não bloqueia */
     const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:hardL?'O servidor recusou isso há pouco. Use ↻ Atualizar para tentar de novo.':'Você não tem permissão para remover esta tag.'}">🔒 ${(lackAdd||(hardL&&!has))?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
@@ -253,8 +261,8 @@ function renderPresets(){
     await post('/api/presets',{presets});renderPresets();
   };
 }
-function blockedAdd(id){const g=groups.find(x=>x.sgid===id);return !!(g&&((power&&power.add!=null&&g.addp>power.add)||(!power&&learnedNo(g,false))))}
-function blockedRem(id){const g=groups.find(x=>x.sgid===id);return !!(g&&((power&&power.rem!=null&&g.remp>power.rem)||(!power&&learnedNo(g,true))))}
+function blockedAdd(id){const g=groups.find(x=>x.sgid===id);return !!(g&&((power&&power.add!=null&&g.addp>power.add)||(!power&&inferNo(g,false))))}
+function blockedRem(id){const g=groups.find(x=>x.sgid===id);return !!(g&&((power&&power.rem!=null&&g.remp>power.rem)||(!power&&inferNo(g,true))))}
 function diff(){return{add:[...want].filter(x=>!orig.has(x)&&!blockedAdd(x)),rem:[...orig].filter(x=>!want.has(x)&&!blockedRem(x))}}
 function update(full=true){
   const d=diff(),n=d.add.length+d.rem.length;
@@ -366,7 +374,8 @@ $('updgo').onclick=async()=>{
   const iv=setInterval(async()=>{ try{ const r=await fetch('/api/status'); if(r.ok&&Date.now()-t0>1500){clearInterval(iv);location.reload()} }catch(e){} },700);
 };
 setTimeout(()=>checkUpdate(false),800);
-setInterval(()=>checkUpdate(false),6*3600*1000);
+setInterval(()=>checkUpdate(false),30*60*1000);
+let lastChk=Date.now();window.addEventListener('focus',()=>{if(Date.now()-lastChk>10*60*1000){lastChk=Date.now();checkUpdate(false)}});
 (async()=>{const s=await (await fetch('/api/status')).json();$('ver').textContent='v'+(s.version||'');if(!s.hasKey)$('dlg').showModal();else load()})();
 </script>
 </body>

@@ -7,7 +7,7 @@ Como funciona
   3. Na próxima abertura (ou ao clicar em "Reiniciar") o app passa a rodar a partir de <dados>/current/.
 Nada é gravado dentro da pasta do app instalado, então funciona no Mac e no Windows sem permissão extra.
 """
-import hashlib, json, os, shutil, urllib.request
+import hashlib, json, os, re, shutil, urllib.request
 
 REPO = "gabrielgm12/GRUPO-TS3-FROST-DEVELOPER"
 BRANCH = "main"
@@ -31,8 +31,25 @@ def read_version(folder):
         return "0"
 
 
-def _get(name, timeout=15):
-    req = urllib.request.Request(RAW + name, headers=HEADERS)
+def _base():
+    """Endereço dos arquivos. Usa o commit mais recente (SHA) em vez da branch: o GitHub guarda a branch em cache
+    por ~5 min e misturava manifest novo com arquivos velhos (checksum não confere -> a atualização nunca instalava)."""
+    if os.environ.get("GRUPOS_RAW"):
+        return RAW
+    try:
+        req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/commits/{BRANCH}",
+                                     headers={**HEADERS, "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            sha = json.loads(r.read().decode("utf-8")).get("sha", "")
+        if re.fullmatch(r"[0-9a-f]{40}", sha):
+            return f"https://raw.githubusercontent.com/{REPO}/{sha}/"
+    except Exception:
+        pass
+    return RAW
+
+
+def _get(name, timeout=15, base=None):
+    req = urllib.request.Request((base or RAW) + name, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 
@@ -40,7 +57,7 @@ def _get(name, timeout=15):
 def check(running_version):
     """Compara a versão que está rodando com a do GitHub."""
     try:
-        m = json.loads(_get("manifest.json", 8).decode("utf-8"))
+        m = json.loads(_get("manifest.json", 8, _base()).decode("utf-8"))
     except Exception as e:
         return {"ok": False, "current": running_version, "error": f"sem acesso ao GitHub ({e.__class__.__name__})"}
     latest = str(m.get("version", "0"))
@@ -50,7 +67,8 @@ def check(running_version):
 
 def download(data_dir, running_version):
     """Baixa a versão nova para <dados>/current (só se for mais nova que a que está rodando)."""
-    m = json.loads(_get("manifest.json").decode("utf-8"))
+    base = _base()   # manifest e arquivos do MESMO commit
+    m = json.loads(_get("manifest.json", 15, base).decode("utf-8"))
     latest = str(m["version"])
     if vt(latest) <= vt(running_version):
         return {"ok": True, "updated": False, "latest": latest}
@@ -62,7 +80,7 @@ def download(data_dir, running_version):
         for name, sha in files.items():
             if name not in ALLOWED or "/" in name or "\\" in name:
                 raise ValueError(f"arquivo não permitido no manifest: {name}")
-            blob = _get(name, 60)
+            blob = _get(name, 60, base)
             if hashlib.sha256(blob).hexdigest() != sha.lower():
                 raise ValueError(f"checksum não confere: {name}")
             with open(os.path.join(stage, name), "wb") as f:
