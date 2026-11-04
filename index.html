@@ -212,7 +212,7 @@ async function post(p,b={}){
 let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
 
 function setSub(){
-  const p=probing?' · ⏳ verificando suas permissões…':power?` · seu poder: +${power.add} / −${power.rem}`:(/2568/.test(powerErr)?' · ⚠ este servidor não deixa você ver suas permissões: o app descobre o seu poder com testes sem efeito':' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':''));
+  const p=probing?` · ⏳ verificando suas permissões${queue.length?' ('+queue.length+' na fila)':''}…`:power?` · seu poder: +${power.add} / −${power.rem}`:(/2568/.test(powerErr)?' · ⚠ este servidor não deixa você ver suas permissões (falta b_client_permissionoverview_view): o app testa tag por tag, o que é mais lento':' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':''));
   $('sub').textContent=`${clients.length} online · ${groups.length} grupos`+p;
 }
 function tlock(){return !!(power&&power.cpm!=null&&tneed!=null&&tneed>power.cpm)}
@@ -241,7 +241,7 @@ function enqueueVisible(){
   io=new IntersectionObserver(es=>{for(const e of es){ if(!e.isIntersecting) continue;
     const id=e.target.dataset.sg,g=groups.find(x=>x.sgid===id); if(!g) continue;
     const key=orig.has(id)?'rem':'add',L=learned[id]||{};
-    if((key==='add'?L.add:L.rem)===undefined&&!inq.has(id)&&!semTeste.has(id+key)){inq.add(id);queue.push({g,key,token:pickToken});paintBadge(id)}}
+    if((key==='add'?g.addp:g.remp)>0&&(key==='add'?L.add:L.rem)===undefined&&!inq.has(id)&&!semTeste.has(id+key)){inq.add(id);queue.push({g,key,token:pickToken});paintBadge(id)}}
     runQueue()},{root:$('groups'),threshold:.6});
   $('groups').querySelectorAll('label.grp[data-sg]').forEach(el=>io.observe(el));
 }
@@ -249,7 +249,7 @@ function paintBadge(id){const el=$('groups').querySelector(`label.grp[data-sg="$
 async function runQueue(){
   if(running) return; running=true;
   while(queue.length){
-    const it=queue.pop();                       // o último que apareceu na tela primeiro
+    const it=queue.shift();                     // de cima para baixo, na ordem da tela
     if(it.token!==pickToken||power){inq.delete(it.g.sgid);continue}
     probing=true;setSub();
     await canDo(it.g,it.key);
@@ -271,7 +271,7 @@ function renderGroups(keep){
     const tl=tlock(),hard=lackAdd||lackRem||hardL||tl;
     const locked=!hard&&learnedNo(g,has); /* aviso, não bloqueia */
     const badge=tl?'<span class="badge b-lock" title="Esta pessoa tem um poder maior que o seu: o TeamSpeak não deixa você mudar as tags dela.">🔒 pessoa protegida</span>':hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:hardL?'O servidor recusou isso há pouco. Use ↻ Atualizar para tentar de novo.':'Você não tem permissão para remover esta tag.'}">🔒 ${(lackAdd||(hardL&&!has))?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
-    const key=has?'rem':'add',known=(key==='add'?L.add:L.rem)!==undefined;
+    const key=has?'rem':'add',known=(key==='add'?L.add:L.rem)!==undefined||(key==='add'?g.addp:g.remp)===0;   // exigência 0 = qualquer um pode
     const unkB=(!power&&cur&&!hard&&!known)?`<span class="badge b-unk" title="${semTeste.has(g.sgid+key)?'Não há ninguém online para servir de teste para esta tag. O servidor decide quando você tentar.':'Ainda não sei se você pode '+(has?'remover':'adicionar')+' esta tag. Estou testando as que aparecem na tela.'}">${inq.has(g.sgid)?'⏳ verificando…':semTeste.has(g.sgid+key)?'? sem como testar':'? não verificado'}</span>`:'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
