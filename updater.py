@@ -32,20 +32,30 @@ def read_version(folder):
 
 
 def _base():
-    """Endereço dos arquivos. Usa o commit mais recente (SHA) em vez da branch: o GitHub guarda a branch em cache
-    por ~5 min e misturava manifest novo com arquivos velhos (checksum não confere -> a atualização nunca instalava)."""
+    """(endereço dos arquivos, de onde veio). Usa o commit mais recente (SHA) em vez da branch: o GitHub guarda a branch
+    em cache por ~5 min e misturava manifest novo com arquivos velhos (checksum não confere -> a atualização nunca instalava).
+    Ordem: API do GitHub (60 consultas/h por internet) -> feed do repositório (sem esse limite) -> branch (pode estar em cache)."""
     if os.environ.get("GRUPOS_RAW"):
-        return RAW
+        return RAW, "teste"
+    erros = []
     try:
         req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/commits/{BRANCH}",
                                      headers={**HEADERS, "Accept": "application/vnd.github+json"})
         with urllib.request.urlopen(req, timeout=8) as r:
             sha = json.loads(r.read().decode("utf-8")).get("sha", "")
         if re.fullmatch(r"[0-9a-f]{40}", sha):
-            return f"https://raw.githubusercontent.com/{REPO}/{sha}/"
-    except Exception:
-        pass
-    return RAW
+            return f"https://raw.githubusercontent.com/{REPO}/{sha}/", "commit " + sha[:7]
+    except Exception as e:
+        erros.append("API " + (str(getattr(e, "code", "")) or e.__class__.__name__))
+    try:
+        req = urllib.request.Request(f"https://github.com/{REPO}/commits/{BRANCH}.atom", headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=8) as r:
+            m = re.search(r"Grit::Commit/([0-9a-f]{40})", r.read(200000).decode("utf-8", "replace"))
+        if m:
+            return f"https://raw.githubusercontent.com/{REPO}/{m.group(1)}/", "commit " + m.group(1)[:7]
+    except Exception as e:
+        erros.append("feed " + (str(getattr(e, "code", "")) or e.__class__.__name__))
+    return RAW, "cache da branch (" + ", ".join(erros) + ")"
 
 
 def _get(name, timeout=15, base=None):
@@ -56,18 +66,19 @@ def _get(name, timeout=15, base=None):
 
 def check(running_version):
     """Compara a versão que está rodando com a do GitHub."""
+    base, fonte = _base()
     try:
-        m = json.loads(_get("manifest.json", 8, _base()).decode("utf-8"))
+        m = json.loads(_get("manifest.json", 8, base).decode("utf-8"))
     except Exception as e:
         return {"ok": False, "current": running_version, "error": f"sem acesso ao GitHub ({e.__class__.__name__})"}
     latest = str(m.get("version", "0"))
-    return {"ok": True, "current": running_version, "latest": latest,
+    return {"ok": True, "current": running_version, "latest": latest, "source": fonte,
             "available": vt(latest) > vt(running_version), "notes": m.get("notes", "")}
 
 
 def download(data_dir, running_version):
     """Baixa a versão nova para <dados>/current (só se for mais nova que a que está rodando)."""
-    base = _base()   # manifest e arquivos do MESMO commit
+    base, fonte = _base()   # manifest e arquivos do MESMO commit
     m = json.loads(_get("manifest.json", 15, base).decode("utf-8"))
     latest = str(m["version"])
     if vt(latest) <= vt(running_version):

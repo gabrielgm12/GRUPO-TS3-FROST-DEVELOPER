@@ -1,12 +1,12 @@
 {
-  "version": "1.17",
-  "notes": "Testes de permissão releem os grupos da pessoa no servidor (nunca mudam nada por lista velha); diagnóstico detalhado",
+  "version": "1.18",
+  "notes": "Atualização: não trava quando já há versão baixada, mostra a fonte da checagem, usa feed do GitHub se a API estiver limitada, aviso se não reiniciar",
   "files": {
     "server.py": "d689b0024a67cd0697670a888cf633c081b35f94f901b812376bc4c8db8050bd",
-    "updater.py": "c36f7f821be73184db60475b00c9ba5dc8fc16dc7e9c3cef2e9a30722c56da7f",
-    "index.html": "2bdbd36c222e4864a5347f11790a4a433aa8f84346e6f7a0315eafc6ab47e0b2",
+    "updater.py": "4be62cd124aa61c40a91cad99705cf03045013b8fdbaefcf87cf1dfda45f7577",
+    "index.html": "bb06f0125d5fd3652a579c3d9bd4f8d01399858d0cd0117bb24f05b641310f25",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "bc31fde8e68d7abef1254c51b87e16bb1ee24fffb9e0641449bd7a6ccc983bf4"
+    "version.txt": "60e5336bcff0a6a98a3ef80c7ac9c71022bae0d086d7e98dea8755cef4d7b0b1"
   }
 }

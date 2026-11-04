@@ -175,7 +175,7 @@ dialog p{color:var(--mut);line-height:1.5}
 
 <script>
 const $=id=>document.getElementById(id);
-let probing=false,servers=[],powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let lastChk=Date.now(),probing=false,servers=[],powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -370,20 +370,26 @@ setInterval(()=>fetch('/api/ping').catch(()=>{}),3000);fetch('/api/ping').catch(
 /* ---- atualização automática pelo GitHub ---- */
 const banner=(t,btn)=>{$('upd').hidden=false;$('updtxt').textContent=t;$('updgo').hidden=!btn};
 async function checkUpdate(manual){
+  lastChk=Date.now();
+  if(manual) $('chk').textContent='⏳ Verificando…';
   try{
     const c=await post('/api/update/check');
     if(!c.ok){ $('chk').textContent='⬆ Verificar atualização'; if(manual) toast(c.error,false); return }
-    if(!c.available){ $('chk').textContent='✓ Atualizado (v'+c.current+')'; if(manual) toast('Você já está na versão mais nova ('+c.current+')'); return }
-    if(updating) return; updating=true;
+    if(!c.available){ $('chk').textContent='✓ Atualizado (v'+c.current+')'; if(manual) toast('Você já está na versão mais nova ('+c.current+') · fonte: '+(c.source||'?')); return }
+    if(updating){ if(manual) toast('Já estou baixando a versão '+c.latest+'…'); return }
+    updating=true;
+    $('chk').textContent='⬇ Baixando v'+c.latest+'…';
     banner('⬇ Baixando a versão '+c.latest+'…',false);
     const d=await post('/api/update/download');
+    updating=false;
     banner('✅ Versão '+d.latest+' baixada'+(c.notes?' — '+c.notes:''),true);
+    $('chk').textContent='✅ v'+d.latest+' baixada';
     // atualização automática: reinicia sozinho se você não tem mudanças marcadas; senão espera você aplicar
     staged=true;
     const pending=cur&&[...want].sort().join()!==[...orig].sort().join();
     if(!pending) setTimeout(()=>$('updgo').click(),1200);
     else banner('✅ Versão '+d.latest+' baixada — vai reiniciar quando você terminar (ou clique ao lado)',true);
-  }catch(e){ updating=false; if(manual) toast('Falha ao atualizar: '+e.message,false); else $('upd').hidden=true }
+  }catch(e){ updating=false; $('chk').textContent='⬆ Verificar atualização'; if(manual) toast('Falha ao atualizar: '+e.message,false); else $('upd').hidden=true }
 }
 $('chk').onclick=()=>checkUpdate(true);
 $('updgo').onclick=async()=>{
@@ -391,11 +397,11 @@ $('updgo').onclick=async()=>{
   banner('Reiniciando…',false);
   await post('/api/restart').catch(()=>{});
   const t0=Date.now();
-  const iv=setInterval(async()=>{ try{ const r=await fetch('/api/status'); if(r.ok&&Date.now()-t0>1500){clearInterval(iv);location.reload()} }catch(e){} },700);
+  const iv=setInterval(async()=>{ if(Date.now()-t0>30000){clearInterval(iv);banner('⚠ Não reiniciou sozinho: feche o app e abra de novo (a versão nova já está baixada).',false);$('updgo').dataset.busy='';return} try{ const r=await fetch('/api/status'); if(r.ok&&Date.now()-t0>1500){clearInterval(iv);location.reload()} }catch(e){} },700);
 };
 setTimeout(()=>checkUpdate(false),800);
 setInterval(()=>checkUpdate(false),30*60*1000);
-let lastChk=Date.now();window.addEventListener('focus',()=>{if(Date.now()-lastChk>10*60*1000){lastChk=Date.now();checkUpdate(false)}});
+window.addEventListener('focus',()=>{if(Date.now()-lastChk>10*60*1000){lastChk=Date.now();checkUpdate(false)}});
 (async()=>{const s=await (await fetch('/api/status')).json();$('ver').textContent='v'+(s.version||'');if(!s.hasKey)$('dlg').showModal();else load()})();
 </script>
 </body>
