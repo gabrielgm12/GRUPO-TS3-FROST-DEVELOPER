@@ -16,6 +16,59 @@ ALLOWED = {"server.py", "updater.py", "index.html", "skin-frost.jpg", "icon.png"
 HEADERS = {"User-Agent": "GruposTS3-Updater"}
 
 
+def log(data_dir, msg):
+    """Anota o que deu errado em <dados>/atualizacao.log (aparece no botão Diagnóstico)."""
+    try:
+        import time
+        with open(os.path.join(data_dir, "atualizacao.log"), "a", encoding="utf-8") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def _trocar(src, dst):
+    """Troca um arquivo com tentativas (no Windows antivírus/janela podem segurar o arquivo por instantes)."""
+    import time
+    ultimo = None
+    for _ in range(8):
+        try:
+            os.replace(src, dst)
+            return
+        except OSError as e:
+            ultimo = e
+            time.sleep(0.4)
+    raise ultimo
+
+
+def _instalar(stage, cur, nomes):
+    """Copia os arquivos novos para <dados>/current ARQUIVO A ARQUIVO (renomear a pasta inteira falha no Windows se
+    algo estiver aberto lá dentro). Se algum falhar, devolve os antigos. version.txt vai por último."""
+    os.makedirs(cur, exist_ok=True)
+    ordem = [n for n in nomes if n != "version.txt"] + (["version.txt"] if "version.txt" in nomes else [])
+    antigos, feitos = {}, []
+    try:
+        for n in ordem:
+            dst = os.path.join(cur, n)
+            if os.path.exists(dst):
+                with open(dst, "rb") as f:
+                    antigos[n] = f.read()
+            tmp = dst + ".novo"
+            shutil.copyfile(os.path.join(stage, n), tmp)
+            _trocar(tmp, dst)
+            feitos.append(n)
+    except Exception:
+        for n in feitos:   # desfaz: volta o que já tinha sido trocado
+            try:
+                if n in antigos:
+                    with open(os.path.join(cur, n), "wb") as f:
+                        f.write(antigos[n])
+                else:
+                    os.remove(os.path.join(cur, n))
+            except OSError:
+                pass
+        raise
+
+
 def vt(v):
     out = []
     for p in str(v).strip().lstrip("v").split("."):
@@ -64,13 +117,15 @@ def _get(name, timeout=15, base=None):
         return r.read()
 
 
-def check(running_version):
+def check(running_version, data_dir=None):
     """Compara a versão que está rodando com a do GitHub."""
     base, fonte = _base()
     try:
         m = json.loads(_get("manifest.json", 8, base).decode("utf-8"))
     except Exception as e:
-        return {"ok": False, "current": running_version, "error": f"sem acesso ao GitHub ({e.__class__.__name__})"}
+        if data_dir:
+            log(data_dir, f"checagem falhou ({fonte}): {e.__class__.__name__}: {e}")
+        return {"ok": False, "current": running_version, "error": f"sem acesso ao GitHub ({e.__class__.__name__}: {e})"}
     latest = str(m.get("version", "0"))
     return {"ok": True, "current": running_version, "latest": latest, "source": fonte,
             "available": vt(latest) > vt(running_version), "notes": m.get("notes", "")}
@@ -103,13 +158,11 @@ def download(data_dir, running_version):
         for py in ("server.py", "updater.py"):
             with open(os.path.join(stage, py), encoding="utf-8") as f:
                 compile(f.read(), py, "exec")
-        cur, old = os.path.join(data_dir, "current"), os.path.join(data_dir, "current.old")
-        shutil.rmtree(old, ignore_errors=True)
-        if os.path.exists(cur):
-            os.replace(cur, old)
-        os.replace(stage, cur)
-        shutil.rmtree(old, ignore_errors=True)
-    except Exception:
+        cur = os.path.join(data_dir, "current")
+        _instalar(stage, cur, list(files))
+        shutil.rmtree(stage, ignore_errors=True)
+    except Exception as e:
+        log(data_dir, f"falha ao instalar {latest}: {e.__class__.__name__}: {e}")
         shutil.rmtree(stage, ignore_errors=True)
         raise
     return {"ok": True, "updated": True, "latest": latest, "notes": m.get("notes", "")}

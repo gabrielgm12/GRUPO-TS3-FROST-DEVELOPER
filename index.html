@@ -161,7 +161,7 @@ dialog p{color:var(--mut);line-height:1.5}
 
 <dialog id="diag">
   <h3 style="margin-top:0">Diagnóstico</h3>
-  <p>Escolha uma pessoa na lista, rode e mande este texto para o suporte.</p>
+  <p>Mande este texto para o suporte (escolher uma pessoa antes inclui os testes de permissão).</p>
   <textarea id="diagtxt" readonly rows="12" style="width:100%;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px ui-monospace,Menlo,Consolas,monospace;user-select:text;-webkit-user-select:text"></textarea>
   <div class="bar" style="margin-top:10px"><button class="btn" id="diagcopy">Copiar</button><button class="btn pri" id="diagok">Fechar</button></div>
 </dialog>
@@ -358,8 +358,12 @@ $('apply').onclick=async()=>{
 };
 $('diagb').onclick=async()=>{
   $('diagtxt').value='Rodando…';$('diag').showModal();
-  try{$('diagtxt').value=(await post('/api/diag',{cldbid:cur&&cur.cldbid,have:[...orig]})).report}
-  catch(e){$('diagtxt').value=e.message}
+  let t='';
+  try{t=(await post('/api/diag/update')).report}catch(e){t='atualização: '+e.message}
+  $('diagtxt').value=t+'\n\nRodando testes de permissão…';
+  if(!cur){$('diagtxt').value=t+'\n\n(Escolha uma pessoa na lista e rode de novo para incluir os testes de permissão.)';return}
+  try{t+='\n\n'+(await post('/api/diag',{cldbid:cur.cldbid})).report}catch(e){t+='\n\npermissões: '+e.message}
+  $('diagtxt').value=t;
 };
 $('diagok').onclick=()=>$('diag').close();
 $('diagcopy').onclick=async()=>{$('diagtxt').select();try{await navigator.clipboard.writeText($('diagtxt').value);toast('Copiado')}catch(e){document.execCommand('copy');toast('Copiado')}};

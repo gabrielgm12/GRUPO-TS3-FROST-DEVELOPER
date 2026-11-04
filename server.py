@@ -283,7 +283,24 @@ def api(path, body):
         threading.Timer(0.3, lambda: os._exit(0)).start()
         return {"ok": True}
     if path == "/api/update/check":
-        return updater.check(VERSION)
+        return updater.check(VERSION, DATA)
+    if path == "/api/diag/update":
+        L = [f"app v{VERSION} | {sys.platform} | python {sys.version.split()[0]} | {sys.executable}",
+             f"pasta do app: {HERE}", f"pasta de dados: {DATA}"]
+        cur = os.path.join(DATA, "current")
+        L.append(f"pasta 'current': {'v' + updater.read_version(cur) + ' ' + str(sorted(os.listdir(cur))) if os.path.isdir(cur) else 'não existe'}")
+        L.append(f"versão instalada (pacote): v{updater.read_version(os.path.dirname(os.path.abspath(updater.__file__)))} | rodando de: {HERE}")
+        try:
+            c = updater.check(VERSION, DATA)
+            L.append(f"checagem: {c}")
+        except Exception as e:
+            L.append(f"checagem lançou erro: {e.__class__.__name__}: {e}")
+        try:
+            with open(os.path.join(DATA, "atualizacao.log"), encoding="utf-8") as f:
+                L.append("atualizacao.log (últimas linhas):\n" + "".join(f.readlines()[-8:]).rstrip())
+        except OSError:
+            L.append("atualizacao.log: vazio (nenhuma falha registrada)")
+        return {"report": "\n".join(L)}
     if path == "/api/update/download":
         return updater.download(DATA, VERSION)
     if path == "/api/restart":
