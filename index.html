@@ -129,6 +129,7 @@ dialog p{color:var(--mut);line-height:1.5}
   <div class="actions">
     <select id="srv" class="btn" hidden title="Servidor do TeamSpeak"></select>
     <button class="btn" id="chk" title="Verifica no GitHub se há versão nova (não envia nada ao servidor do TeamSpeak)">⬆ Verificar atualização</button>
+    <button class="btn" id="diagb" title="Gera um relatório para enviar ao suporte">🩺 Diagnóstico</button>
     <button class="btn" id="reload">↻ Atualizar</button>
     <button class="btn" id="cfg">🔑 API key</button>
   </div>
@@ -157,6 +158,13 @@ dialog p{color:var(--mut);line-height:1.5}
 </main>
 
 <div id="toast"></div>
+
+<dialog id="diag">
+  <h3 style="margin-top:0">Diagnóstico</h3>
+  <p>Escolha uma pessoa na lista, rode e mande este texto para o suporte.</p>
+  <textarea id="diagtxt" readonly rows="12" style="width:100%;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px ui-monospace,Menlo,Consolas,monospace;user-select:text;-webkit-user-select:text"></textarea>
+  <div class="bar" style="margin-top:10px"><button class="btn" id="diagcopy">Copiar</button><button class="btn pri" id="diagok">Fechar</button></div>
+</dialog>
 
 <dialog id="dlg">
   <h3 style="margin-top:0">API key do ClientQuery</h3>
@@ -282,7 +290,7 @@ async function pick(c){
     orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();
     if(!power){            // servidor não deixa ler as permissões: descobre o poder com comandos sem efeito
       probing=true;update();
-      try{const p=await post('/api/probe',{cldbid:c.cldbid,have:[...orig]});if(token===pickToken)learned=p.learned||learned}catch(e){}
+      try{const p=await post('/api/probe',{cldbid:c.cldbid,have:[...orig]});if(token===pickToken)learned=p.learned||learned}catch(e){toast('Teste de permissões: '+e.message,false)}
       probing=false;update();
     }
     
@@ -348,6 +356,13 @@ $('apply').onclick=async()=>{
     orig=new Set((await post('/api/member',{cldbid:cur.cldbid})).sgids);want=new Set(orig);noRemLater=new Set();renderWho();update();await probeRemove(pickToken);if(staged)setTimeout(()=>$('updgo').click(),2500)}
   catch(e){toast(e.message,false);update()}
 };
+$('diagb').onclick=async()=>{
+  $('diagtxt').value='Rodando…';$('diag').showModal();
+  try{$('diagtxt').value=(await post('/api/diag',{cldbid:cur&&cur.cldbid,have:[...orig]})).report}
+  catch(e){$('diagtxt').value=e.message}
+};
+$('diagok').onclick=()=>$('diag').close();
+$('diagcopy').onclick=async()=>{$('diagtxt').select();try{await navigator.clipboard.writeText($('diagtxt').value);toast('Copiado')}catch(e){document.execCommand('copy');toast('Copiado')}};
 $('cfg').onclick=()=>$('dlg').showModal();
 $('keyno').onclick=()=>$('dlg').close();
 $('keyok').onclick=async()=>{await post('/api/config',{apikey:$('key').value});$('dlg').close();load()};

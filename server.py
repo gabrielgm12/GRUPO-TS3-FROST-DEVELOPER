@@ -371,6 +371,37 @@ def api(path, body):
                 # descontinuado: o teste com ID inexistente dava falso "sem permissão". A regra de poder
                 # (seu poder x o que a tag exige, vindo do servidor) é usada no lugar, sem comandos extras.
                 return {"can": {sgid: None for sgid in body.get("sgids", [])}}
+            if path == "/api/diag":
+                # relatório para diagnóstico (só leitura + testes sem efeito). Texto simples para copiar e colar.
+                cldbid, have = str(body.get("cldbid", "")), {str(x) for x in body.get("have", [])}
+                if not cldbid.isdigit() or not all(x.isdigit() for x in have):
+                    raise RuntimeError("Escolha uma pessoa na lista antes de rodar o diagnóstico.")
+                L = [f"app v{VERSION} | servidor schandlerid={ts.sch} chave={_srvkey[0]}"]
+                glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
+                gn = [g for g in glist if g.get("type") in ("1", None)]
+                L.append(f"grupos: {len(glist)} no total, {len(gn)} normais; campos do 1º: {sorted(glist[0].keys()) if glist else '-'}")
+                ap = sorted({int(g.get('n_member_addp') or 0) for g in gn}); rp = sorted({int(g.get('n_member_removep') or 0) for g in gn})
+                L.append(f"níveis exigidos p/ adicionar: {ap[:15]}{'…' if len(ap) > 15 else ''} | p/ remover: {rp[:15]}{'…' if len(rp) > 15 else ''}")
+                clist = [c for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
+                try:
+                    L.append(f"poder lido do servidor: {my_power(ts, clist, gn)}")
+                except RuntimeError as e:
+                    L.append(f"leitura do poder FALHOU: {e}")
+                for key, verb, field, ok in (("remover", "servergroupdelclient", "n_member_removep", "2563"),
+                                             ("adicionar", "servergroupaddclient", "n_member_addp", "2561")):
+                    pool = sorted([g for g in gn if int(g.get(field) or 0) > 0 and ((g["sgid"] in have) == (key == "adicionar"))],
+                                  key=lambda g: int(g.get(field) or 0))
+                    if not pool:
+                        L.append(f"teste {key}: sem grupo adequado para testar (pessoa escolhida tem {len(have)} grupo(s))")
+                        continue
+                    for g in {pool[0]["sgid"]: pool[0], pool[len(pool) // 2]["sgid"]: pool[len(pool) // 2], pool[-1]["sgid"]: pool[-1]}.values():
+                        try:
+                            ts.cmd(f"{verb} sgid={g['sgid']} cldbid={cldbid}")
+                            r = "SEM ERRO (!)"
+                        except RuntimeError as e:
+                            r = str(e)
+                        L.append(f"teste {key} | grupo {g['sgid']} (exige {g.get(field)}) -> {r}")
+                return {"report": "\n".join(L)}
             if path == "/api/probe":
                 # Servidor não deixa ler as permissões: descobre o poder com comandos SEM efeito, por busca binária.
                 #  remover: grupo em que a pessoa NÃO está   -> 2563 (permitido) ou 2568 (sem permissão)
