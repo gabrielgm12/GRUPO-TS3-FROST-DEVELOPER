@@ -221,7 +221,7 @@ function inferNo(g,has){return learnedNo(g,has)}
 async function canDo(g,key){   // true = pode, false = sem permissão, null = não deu para saber
   const L=learned[g.sgid]||{},v=key==='add'?L.add:L.rem; if(v===true||v===false) return v;
   const who=cur;
-  try{const r=await post('/api/can',{sgid:g.sgid,action:key,cldbid:who.cldbid});learned=r.learned||learned;return r.ok}catch(e){return null}
+  try{const r=await post('/api/can',{sgid:g.sgid,action:key});learned=r.learned||learned;if(r.ok===null||r.ok===undefined)semTeste.add(g.sgid+key);return r.ok}catch(e){return null}
 }
 function renderClients(){
   const q=$('qc').value;
@@ -233,14 +233,14 @@ function renderClients(){
 function renderWho(){
   $('who').innerHTML=cur?`<div class="av" style="background:${color(cur.name)}">${esc(ini(cur.name))}</div><div><b>${esc(cur.name)}</b><span>${orig.size} grupo(s) atual(is) · ID ${cur.cldbid}</span></div>`:'<div class="empty" style="padding:6px">← Escolha uma pessoa para começar</div>';
 }
-const inq=new Set();let queue=[],running=false,io=null;
+const inq=new Set(),semTeste=new Set();let queue=[],running=false,io=null;
 function enqueueVisible(){
   if(power||!cur) return;
   if(io) io.disconnect();
   io=new IntersectionObserver(es=>{for(const e of es){ if(!e.isIntersecting) continue;
     const id=e.target.dataset.sg,g=groups.find(x=>x.sgid===id); if(!g) continue;
     const key=orig.has(id)?'rem':'add',L=learned[id]||{};
-    if((key==='add'?L.add:L.rem)===undefined&&!inq.has(id)){inq.add(id);queue.push({g,key,token:pickToken});paintBadge(id)}}
+    if((key==='add'?L.add:L.rem)===undefined&&!inq.has(id)&&!semTeste.has(id+key)){inq.add(id);queue.push({g,key,token:pickToken});paintBadge(id)}}
     runQueue()},{root:$('groups'),threshold:.6});
   $('groups').querySelectorAll('label.grp[data-sg]').forEach(el=>io.observe(el));
 }
@@ -271,7 +271,7 @@ function renderGroups(keep){
     const locked=!hard&&learnedNo(g,has); /* aviso, não bloqueia */
     const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:hardL?'O servidor recusou isso há pouco. Use ↻ Atualizar para tentar de novo.':'Você não tem permissão para remover esta tag.'}">🔒 ${(lackAdd||(hardL&&!has))?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
     const key=has?'rem':'add',known=(key==='add'?L.add:L.rem)!==undefined;
-    const unkB=(!power&&cur&&!hard&&!known)?`<span class="badge b-unk" title="Ainda não sei se você pode ${has?'remover':'adicionar'} esta tag. Estou testando as que aparecem na tela.">${inq.has(g.sgid)?'⏳ verificando…':'? não verificado'}</span>`:'';
+    const unkB=(!power&&cur&&!hard&&!known)?`<span class="badge b-unk" title="${semTeste.has(g.sgid+key)?'Não há ninguém online para servir de teste para esta tag. O servidor decide quando você tentar.':'Ainda não sei se você pode '+(has?'remover':'adicionar')+' esta tag. Estou testando as que aparecem na tela.'}">${inq.has(g.sgid)?'⏳ verificando…':semTeste.has(g.sgid+key)?'? sem como testar':'? não verificado'}</span>`:'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
     return `<label class="grp ${cur&&!hard?'':'dis'}" data-sg="${g.sgid}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge||unkB}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';

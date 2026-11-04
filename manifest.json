@@ -1,12 +1,12 @@
 {
-  "version": "1.22",
-  "notes": "Lista mostra, tag por tag, se você tem permissão (⏳ verificando / 🔒 / livre) para o que aparece na tela; mostra a permissão que falta quando o servidor nega a leitura",
+  "version": "1.23",
+  "notes": "Teste por tag usa os grupos de quem está online (clientlist -groups): sem exigir permissão de listar membros; avisa quando não há como testar",
   "files": {
-    "server.py": "f2fd49930f8b2e74712e8675f30459653623060c66f487954beeca527c3f2226",
+    "server.py": "a21fee396c461b9f50e25ce1d86ef1df95a662264111ff79f9e92c1bb2153556",
     "updater.py": "93e9fc65ca6be027567518efdc38dd1f4060763f81453083d91e22ecdb0f0166",
-    "index.html": "dd188720bd01ac73bf93041091f2d25c1d80ac4c6475d6992f99dcd71fc3d5f4",
+    "index.html": "bf44644ad8dec87c4dfa20381ec0d310c319ee4edca6007cc1e1aea5045d5c6d",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "26a1a741375ed906a518fbbf092004fff2bd0aa1b48879e20ba5936efbb5ec9f"
+    "version.txt": "e2902df5bb55e3039376c56f7b2775eeca583678532a2efe0e15f6c4ffdc229f"
   }
 }

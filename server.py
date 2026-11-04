@@ -449,48 +449,38 @@ def api(path, body):
                 return {"report": "\n".join(L)}
             if path == "/api/can":
                 # Teste de UMA tag, sem efeito em ninguém (usado quando o servidor não deixa ler as permissões).
-                #  adicionar: pega um MEMBRO do grupo e tenta adicioná-lo de novo ("já é membro" = permitido)
-                #  remover:   pega alguém que NÃO está no grupo e tenta removê-lo ("não é membro" = permitido)
-                #  2568 = sem permissão (o servidor dá failed_permid). 531/532/2561/2563 = passou da checagem de permissão.
-                sgid, action, cldbid = str(body.get("sgid", "")), body.get("action"), str(body.get("cldbid", ""))
-                if not sgid.isdigit() or action not in ("add", "rem") or not cldbid.isdigit():
+                # Os grupos de quem está online vêm de `clientlist -groups` (local, sem custo de flood e sem exigir permissão).
+                #  adicionar: usa alguém online que JÁ tem a tag e tenta adicionar de novo ("já é membro" = permitido)
+                #  remover:   usa alguém online que NÃO tem a tag e tenta remover ("não é membro" = permitido)
+                #  2568 = sem permissão (failed_permid = o seu poder de adicionar/remover). 531/532/2561/2563 = passou da checagem.
+                sgid, action = str(body.get("sgid", "")), body.get("action")
+                if not sgid.isdigit() or action not in ("add", "rem"):
                     raise RuntimeError("dados inválidos")
                 known = fresh_learned().get(sgid, {})
                 if action in known:
                     return {"ok": known[action], "learned": fresh_learned()}
-                verdict = None
-                try:
-                    me = None
+                verdict, why = None, ""
+                online = [c for c in ts.cmd("clientlist -groups") if c.get("client_type") == "0" and c.get("client_database_id")]  # sempre fresco
+                has_g = lambda c: sgid in (c.get("client_servergroups") or "").split(",")
+                if action == "add":
+                    pick = next((c for c in online if has_g(c)), None)
+                else:
+                    pick = next((c for c in online if not has_g(c)), None)
+                if not pick:
+                    why = "ninguém online tem esta tag para servir de teste" if action == "add" else "todos online já têm esta tag"
+                else:
+                    verb = "servergroupaddclient" if action == "add" else "servergroupdelclient"
                     try:
-                        who = ts.cmd("whoami")[0]
-                        cl = cached("clients", 15, lambda: ts.cmd("clientlist"))
-                        me = next((c["client_database_id"] for c in cl if c["clid"] == who["clid"]), None)
-                    except (RuntimeError, KeyError, IndexError):
-                        me = None
-                    mine = None
-                    if me:
-                        mine = cached("mine:" + me, 300, lambda: frozenset(r["sgid"] for r in ts.cmd("servergroupsbyclientid cldbid=" + me, "servergroupsbyclientid")))
-                    target = None
-                    if me and mine is not None and ((action == "add" and sgid in mine) or (action == "rem" and sgid not in mine)):
-                        target = me      # você mesmo serve de alvo: nada muda (já é membro / não é membro)
-                    else:
-                        mem = cached("members:" + sgid, 300, lambda: ts.cmd(f"servergroupclientlist sgid={sgid}", "servergroupclientlist"))
-                        mem = {m["cldbid"] for m in mem if m.get("cldbid", "").isdigit()}
-                        if action == "add":
-                            target = next(iter(mem), None)
-                        else:
-                            clist = [c["client_database_id"] for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
-                            target = next((c for c in [cldbid] + clist if c not in mem), None)
-                    if target:
-                        verb = "servergroupaddclient" if action == "add" else "servergroupdelclient"
-                        try:
-                            ts.cmd(f"{verb} sgid={sgid} cldbid={target}")
+                        ts.cmd(f"{verb} sgid={sgid} cldbid={pick['client_database_id']}")
+                        verdict = True
+                    except RuntimeError as e:
+                        m = str(e)
+                        if "id=2568" in m:
+                            verdict = False
+                        elif any(f"id={x})" in m or f"id={x} " in m for x in ("531", "532", "2561", "2563")):
                             verdict = True
-                        except RuntimeError as e:
-                            m = str(e)
-                            verdict = False if "id=2568" in m else True if any(f"id={x})" in m or m.endswith(f"id={x})") for x in ("531", "532", "2561", "2563")) else None
-                except RuntimeError:
-                    verdict = None
+                        else:
+                            why = m
                 if verdict is not None:
                     learned = load(LEARNED_path(), {})
                     e = learned.setdefault(sgid, {})
@@ -498,7 +488,7 @@ def api(path, body):
                     e[action] = verdict
                     e["t"][action] = time.time()
                     save(LEARNED_path(), learned)
-                return {"ok": verdict, "learned": fresh_learned()}
+                return {"ok": verdict, "why": why, "learned": fresh_learned()}
             if path == "/api/probe":
                 # Servidor não deixa ler as permissões: descobre o poder com comandos SEM efeito, por busca binária.
                 #  remover: grupo em que a pessoa NÃO está   -> 2563 (permitido) ou 2568 (sem permissão)
