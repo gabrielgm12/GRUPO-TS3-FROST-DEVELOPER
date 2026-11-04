@@ -143,7 +143,7 @@ footer{background:rgba(8,5,18,.7)}
 
 <script>
 const $=id=>document.getElementById(id);
-let pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -176,6 +176,11 @@ async function post(p,b={}){
 }
 let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
 
+function setSub(){
+  const p=power?` · seu poder: +${power.add} / −${power.rem}`:' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':'');
+  $('sub').textContent=`${clients.length} online · ${groups.length} grupos`+p;
+}
+function learnedNo(g,has){const L=learned[g.sgid]||{};return has?L.rem===false:L.add===false}
 function renderClients(){
   const q=$('qc').value;
   const list=clients.filter(c=>match(c.name,q));
@@ -195,9 +200,10 @@ function renderGroups(){
     const lackAdd=!has&&power&&power.add!=null&&g.addp>power.add;
     const lackRem=has&&power&&power.rem!=null&&g.remp>power.rem;
     const onlyAdd=!has&&w&&power&&power.rem!=null&&g.remp>power.rem;   // vai conseguir adicionar, mas não vai conseguir tirar depois
-    const hard=lackAdd||lackRem;
-    const locked=!hard&&(has?L.rem===false:L.add===false); /* aviso, não bloqueia */
-    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:'Você não tem permissão para remover esta tag.'}">🔒 ${lackAdd?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
+    const hardL=!power&&learnedNo(g,has);   /* sem ler o poder: confia na recusa do servidor */
+    const hard=lackAdd||lackRem||hardL;
+    const locked=!hard&&learnedNo(g,has); /* aviso, não bloqueia */
+    const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:hardL?'O servidor recusou isso há pouco. Use ↻ Atualizar para tentar de novo.':'Você não tem permissão para remover esta tag.'}">🔒 ${(lackAdd||(hardL&&!has))?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
     return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
@@ -223,8 +229,8 @@ function renderPresets(){
     await post('/api/presets',{presets});renderPresets();
   };
 }
-function blockedAdd(id){const g=groups.find(x=>x.sgid===id);return !!(g&&power&&power.add!=null&&g.addp>power.add)}
-function blockedRem(id){const g=groups.find(x=>x.sgid===id);return !!(g&&power&&power.rem!=null&&g.remp>power.rem)}
+function blockedAdd(id){const g=groups.find(x=>x.sgid===id);return !!(g&&((power&&power.add!=null&&g.addp>power.add)||(!power&&learnedNo(g,false))))}
+function blockedRem(id){const g=groups.find(x=>x.sgid===id);return !!(g&&((power&&power.rem!=null&&g.remp>power.rem)||(!power&&learnedNo(g,true))))}
 function diff(){return{add:[...want].filter(x=>!orig.has(x)&&!blockedAdd(x)),rem:[...orig].filter(x=>!want.has(x)&&!blockedRem(x))}}
 function update(full=true){
   const d=diff(),n=d.add.length+d.rem.length;
@@ -248,10 +254,10 @@ async function pick(c){
 }
 async function load(){
   try{
-    const r=await post('/api/info');learned=r.learned||{};power=r.power||null;groups=r.groups.sort((a,b)=>a.sortid-b.sortid||(+a.sgid)-(+b.sgid));
+    const r=await post('/api/info');learned=r.learned||{};power=r.power||null;powerErr=r.powerErr||'';groups=r.groups.sort((a,b)=>a.sortid-b.sortid||(+a.sgid)-(+b.sgid));
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
     presets=(await post('/api/presets')).presets;
-    $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
+    setSub();
     renderClients();renderPresets();update();
   }catch(e){$('sub').textContent='Sem conexão';toast(e.message,false)}
 }
@@ -261,9 +267,9 @@ let busy=false,lastSoft=0;
 async function softRefresh(){
   if(busy||document.hidden||Date.now()-lastSoft<20000) return; busy=true;lastSoft=Date.now();
   try{
-    const r=await post('/api/info');learned=r.learned||{};power=r.power||power;
+    const r=await post('/api/info');learned=r.learned||{};power=r.power||null;powerErr=r.powerErr||'';
     clients=r.clients.sort((a,b)=>fold(a.name).localeCompare(fold(b.name))||a.name.localeCompare(b.name));
-    $('sub').textContent=`${clients.length} online · ${groups.length} grupos`;
+    setSub();
     const clean=cur&&[...want].sort().join()===[...orig].sort().join();
     if(clean){const m=await post('/api/member',{cldbid:cur.cldbid});orig=new Set(m.sgids);want=new Set(m.sgids);noRemLater=new Set();await probeRemove(pickToken);renderWho()}
     renderClients();update();

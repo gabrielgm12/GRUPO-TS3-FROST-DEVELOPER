@@ -275,11 +275,15 @@ def api(path, body):
                 if not clients:
                     _cache.clear()
                     raise RuntimeError("O TeamSpeak não está conectado a um servidor.")
+                perr = ""
                 try:
                     power = my_power(ts, clients, groups)
+                    if power is None:
+                        perr = "não achei você na lista de clientes"
                 except RuntimeError as e:
-                    power = None
+                    power, perr = None, str(e)
                 return {
+                    "powerErr": perr,
                     "learned": fresh_learned(),
                     "power": power,
                     "groups": [{"sgid": g["sgid"], "name": g["name"], "sortid": int(g.get("sortid") or 0),
