@@ -215,13 +215,12 @@ function setSub(){
   $('sub').textContent=`${clients.length} online · ${groups.length} grupos`+p;
 }
 function learnedNo(g,has){const L=learned[g.sgid]||{};return has?L.rem===false:L.add===false}
-/* sem ler o poder: se o servidor recusou uma tag que exige N, qualquer tag que exija N ou mais também será recusada */
-function inferNo(g,has){
-  if(learnedNo(g,has)) return true;
-  const need=has?g.remp:g.addp; if(!need) return false;
-  for(const id in learned){const o=groups.find(x=>x.sgid===id);if(!o)continue;
-    const n=has?o.remp:o.addp; if(n&&n<=need&&(has?learned[id].rem===false:learned[id].add===false)) return true}
-  return false;
+/* sem ler o poder: vale só o que o servidor respondeu para AQUELA tag (os níveis não são uma régua confiável) */
+function inferNo(g,has){return learnedNo(g,has)}
+async function canDo(g,key){   // true = pode, false = sem permissão, null = não deu para saber
+  const L=learned[g.sgid]||{},v=key==='add'?L.add:L.rem; if(v===true||v===false) return v;
+  const who=cur;
+  try{const r=await post('/api/can',{sgid:g.sgid,action:key,cldbid:who.cldbid});learned=r.learned||learned;return r.ok}catch(e){return null}
 }
 function renderClients(){
   const q=$('qc').value;
@@ -250,9 +249,14 @@ function renderGroups(){
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
     return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
   $('groups').querySelectorAll('input').forEach(i=>i.onchange=async()=>{
-    const id=i.dataset.id;
-    i.checked?want.add(id):want.delete(id);
-    update(false);
+    const id=i.dataset.id,g=groups.find(x=>x.sgid===id),has=orig.has(id),on=i.checked;
+    const key=on?(has?null:'add'):(has?'rem':null);       // voltar ao estado original não precisa de permissão
+    if(power||!key||!g){on?want.add(id):want.delete(id);update(false);return}
+    i.disabled=true;probing=true;setSub();
+    const ok=await canDo(g,key);
+    probing=false;setSub();
+    if(ok===false){toast(`Sem permissão para ${key==='add'?'adicionar':'remover'} “${g.name}”`,false);renderGroups();update();return}
+    on?want.add(id):want.delete(id);update(false);
   });
 }
 function renderPresets(){
@@ -290,10 +294,11 @@ async function pick(c){
     const r=await post('/api/member',{cldbid:c.cldbid});
     if(token!==pickToken) return;
     orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();
-    if(!power){            // servidor não deixa ler as permissões: descobre o poder em segundo plano (a lista já funciona)
+    if(!power){            // servidor não deixa ler as permissões: testa (sem efeito) as tags que a pessoa já tem
+      const held=[...orig].map(id=>groups.find(g=>g.sgid===id)).filter(g=>g&&g.remp>0).slice(0,8);
       probing=true;setSub();update();
-      post('/api/probe',{cldbid:c.cldbid}).then(p=>{if(token===pickToken)learned=p.learned||learned}).catch(e=>toast('Teste de permissões: '+e.message,false))
-        .finally(()=>{if(token===pickToken){probing=false;setSub();update()}});
+      (async()=>{for(const g of held){if(token!==pickToken)return;await canDo(g,'rem');if(token===pickToken)renderGroups()}
+        if(token===pickToken){probing=false;setSub();update()}})();
     }
   }catch(e){toast(e.message,false)}
   renderGroups();
@@ -346,6 +351,14 @@ $('apply').onclick=async()=>{
   if(sem.length){
     const nomes=sem.map(id=>(groups.find(g=>g.sgid===id)||{}).name||id).join('\n• ');
     if(!confirm('Você NÃO terá permissão para remover estas tags depois de adicionar:\n\n• '+nomes+'\n\nQuer adicionar mesmo assim?')) return;
+  }
+  if(!power){
+    $('apply').disabled=true;probing=true;setSub();
+    const negadas=[];
+    for(const id of d.add){const g=groups.find(x=>x.sgid===id);if(g&&await canDo(g,'add')===false){negadas.push(g.name);want.delete(id)}}
+    for(const id of d.rem){const g=groups.find(x=>x.sgid===id);if(g&&await canDo(g,'rem')===false){negadas.push(g.name);want.add(id)}}
+    probing=false;setSub();
+    if(negadas.length){toast('Sem permissão (removidas da seleção): '+negadas.join(', '),false);renderGroups();update();return}
   }
   $('apply').disabled=true;
   try{const r=await post('/api/apply',{cldbid:cur.cldbid,add:d.add,remove:d.rem});

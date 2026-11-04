@@ -93,7 +93,7 @@ def save(path, data):
 BUCKET_MAX = 90.0
 LEAK_PER_S = 4.0
 COST_NET = 15.0        # comandos que realmente vão até o servidor (checam permissão / gravam)
-NET_CMDS = ("permoverview", "servergroupsbyclientid", "servergroupaddclient", "servergroupdelclient")
+NET_CMDS = ("permoverview", "servergroupsbyclientid", "servergroupaddclient", "servergroupdelclient", "servergroupclientlist")
 # auth, clientnotifyregister, clientlist, whoami e servergrouplist são respondidos pelo próprio TeamSpeak local: não contam
 _bucket = [0.0, time.time()]
 _cooldown_until = [0.0]
@@ -447,6 +447,44 @@ def api(path, body):
                         feitos += 1
                         tentar("servergroupaddclient", g, mem[0], f"ADICIONAR(membro) nivel {k}")
                 return {"report": "\n".join(L)}
+            if path == "/api/can":
+                # Teste de UMA tag, sem efeito em ninguém (usado quando o servidor não deixa ler as permissões).
+                #  adicionar: pega um MEMBRO do grupo e tenta adicioná-lo de novo ("já é membro" = permitido)
+                #  remover:   pega alguém que NÃO está no grupo e tenta removê-lo ("não é membro" = permitido)
+                #  2568 = sem permissão (o servidor dá failed_permid). 531/532/2561/2563 = passou da checagem de permissão.
+                sgid, action, cldbid = str(body.get("sgid", "")), body.get("action"), str(body.get("cldbid", ""))
+                if not sgid.isdigit() or action not in ("add", "rem") or not cldbid.isdigit():
+                    raise RuntimeError("dados inválidos")
+                known = fresh_learned().get(sgid, {})
+                if action in known:
+                    return {"ok": known[action], "learned": fresh_learned()}
+                verdict = None
+                try:
+                    mem = cached("members:" + sgid, 300, lambda: ts.cmd(f"servergroupclientlist sgid={sgid}", "servergroupclientlist"))
+                    mem = {m["cldbid"] for m in mem if m.get("cldbid", "").isdigit()}
+                    if action == "add":
+                        target = next(iter(mem), None)
+                    else:
+                        clist = [c["client_database_id"] for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
+                        target = next((c for c in [cldbid] + clist if c not in mem), None)
+                    if target:
+                        verb = "servergroupaddclient" if action == "add" else "servergroupdelclient"
+                        try:
+                            ts.cmd(f"{verb} sgid={sgid} cldbid={target}")
+                            verdict = True
+                        except RuntimeError as e:
+                            m = str(e)
+                            verdict = False if "id=2568" in m else True if any(f"id={x})" in m or m.endswith(f"id={x})") for x in ("531", "532", "2561", "2563")) else None
+                except RuntimeError:
+                    verdict = None
+                if verdict is not None:
+                    learned = load(LEARNED_path(), {})
+                    e = learned.setdefault(sgid, {})
+                    e.setdefault("t", {})
+                    e[action] = verdict
+                    e["t"][action] = time.time()
+                    save(LEARNED_path(), learned)
+                return {"ok": verdict, "learned": fresh_learned()}
             if path == "/api/probe":
                 # Servidor não deixa ler as permissões: descobre o poder com comandos SEM efeito, por busca binária.
                 #  remover: grupo em que a pessoa NÃO está   -> 2563 (permitido) ou 2568 (sem permissão)

@@ -99,7 +99,7 @@ def _base():
         if re.fullmatch(r"[0-9a-f]{40}", sha):
             return f"https://raw.githubusercontent.com/{REPO}/{sha}/", "commit " + sha[:7]
     except Exception as e:
-        erros.append("API " + (str(getattr(e, "code", "")) or e.__class__.__name__))
+        erros.append("API " + (str(getattr(e, "code", "")) or e.__class__.__name__ + ":" + str(getattr(e, "reason", ""))[:40]))
     try:
         req = urllib.request.Request(f"https://github.com/{REPO}/commits/{BRANCH}.atom", headers=HEADERS)
         with urllib.request.urlopen(req, timeout=4) as r:
@@ -107,7 +107,7 @@ def _base():
         if m:
             return f"https://raw.githubusercontent.com/{REPO}/{m.group(1)}/", "commit " + m.group(1)[:7]
     except Exception as e:
-        erros.append("feed " + (str(getattr(e, "code", "")) or e.__class__.__name__))
+        erros.append("feed " + (str(getattr(e, "code", "")) or e.__class__.__name__ + ":" + str(getattr(e, "reason", ""))[:40]))
     return RAW, "cache da branch (" + ", ".join(erros) + ")"
 
 
