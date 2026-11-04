@@ -1,12 +1,12 @@
 {
-  "version": "1.26",
-  "notes": "Verificação de permissões fica salva no PC (por servidor e conta): botão Verificar todas as tags (uma vez) e Reverificar bloqueadas (depois de promoção); ↻ Atualizar não apaga mais",
+  "version": "1.27",
+  "notes": "Tags 'sem como testar' (ninguém online com elas) agora são deduzidas pelas já verificadas: se você passou numa tag que exige 75, todas até 75 liberam; se foi negado em 100, de 100 pra cima ficam bloqueadas",
   "files": {
     "server.py": "8576806eb7da0f46cbd801b5273e0d0fb670e192919299becc785fa761af2029",
     "updater.py": "93e9fc65ca6be027567518efdc38dd1f4060763f81453083d91e22ecdb0f0166",
-    "index.html": "2a1f65861ea688ee2cf2ed01a575a8694496c618a4bd12a55f92af5bf4215d44",
+    "index.html": "b5bacb1217fd583b2e4b49c7a1462e51c0d28e6c028ee6b57448fa38f4378700",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "e3ff483e2adcf56389e8fab903de6240e9f1d76ba7cb1806f661f1878223d95a"
+    "version.txt": "2fcac8d3d1544638590fffbf9f568f8a9828fc82a66c9fa6533c57831a57d913"
   }
 }

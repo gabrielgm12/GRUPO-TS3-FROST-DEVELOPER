@@ -221,11 +221,18 @@ function setSub(){
 function tlock(){return !!(power&&power.cpm!=null&&tneed!=null&&tneed>power.cpm)}
 function learnedNo(g,has){const L=learned[g.sgid]||{};return has?L.rem===false:L.add===false}
 /* sem ler o poder: vale só o que o servidor respondeu para AQUELA tag (os níveis não são uma régua confiável) */
-function inferNo(g,has){return learnedNo(g,has)}
+function bounds(has){   // do que já foi testado: maior exigência que PASSOU e menor que NEGOU (poder >= exigido)
+  const k=has?'rem':'add',f=has?'remp':'addp';let ok=-1,no=1e9;
+  for(const x of groups){const v=(learned[x.sgid]||{})[k];if(v===true&&x[f]>ok)ok=x[f];if(v===false&&x[f]<no)no=x[f]}
+  return {ok,no,f}}
+/* tag sem teste direto (ninguém online com ela): deduz pelas outras, já que vale poder >= exigido */
+function inferBy(g,has){const L=learned[g.sgid]||{},k=has?'rem':'add';if(L[k]!==undefined)return null;
+  const b=bounds(has),n=g[b.f];if(!(n>0))return null;if(n<=b.ok)return true;if(n>=b.no)return false;return null}
+function inferNo(g,has){return learnedNo(g,has)||inferBy(g,has)===false}
 async function canDo(g,key){   // true = pode, false = sem permissão, null = não deu para saber
   const L=learned[g.sgid]||{},v=key==='add'?L.add:L.rem; if(v===true||v===false) return v;
   const who=cur;
-  try{const r=await post('/api/can',{sgid:g.sgid,action:key});learned=r.learned||learned;if(r.ok===null||r.ok===undefined)semTeste.add(g.sgid+key);return r.ok}catch(e){return null}
+  try{const r=await post('/api/can',{sgid:g.sgid,action:key});learned=r.learned||learned;if(r.ok===null||r.ok===undefined){const i=inferBy(g,key==='rem');if(i!==null)return i;semTeste.add(g.sgid+key)}return r.ok}catch(e){return null}
 }
 function renderClients(){
   const q=$('qc').value;
@@ -311,7 +318,7 @@ function renderGroups(keep){
     const tl=tlock(),hard=lackAdd||lackRem||hardL||tl;
     const locked=!hard&&learnedNo(g,has); /* aviso, não bloqueia */
     const badge=tl?'<span class="badge b-lock" title="Esta pessoa tem um poder maior que o seu: o TeamSpeak não deixa você mudar as tags dela.">🔒 pessoa protegida</span>':hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:hardL?'O servidor recusou isso há pouco. Use ↻ Atualizar para tentar de novo.':'Você não tem permissão para remover esta tag.'}">🔒 ${(lackAdd||(hardL&&!has))?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
-    const key=has?'rem':'add',known=(key==='add'?L.add:L.rem)!==undefined||(key==='add'?g.addp:g.remp)===0;   // exigência 0 = qualquer um pode
+    const key=has?'rem':'add',known=(key==='add'?L.add:L.rem)!==undefined||inferBy(g,has)===true||(key==='add'?g.addp:g.remp)===0;   // exigência 0 = qualquer um pode
     const unkB=(!power&&cur&&!hard&&!known)?`<span class="badge b-unk" title="${semTeste.has(g.sgid+key)?'Não há ninguém online para servir de teste para esta tag. O servidor decide quando você tentar.':'Ainda não sei se você pode '+(has?'remover':'adicionar')+' esta tag. Estou testando as que aparecem na tela.'}">${inq.has(g.sgid)?'⏳ verificando…':semTeste.has(g.sgid+key)?'? sem como testar':'? não verificado'}</span>`:'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
