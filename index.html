@@ -167,7 +167,7 @@ dialog p{color:var(--mut);line-height:1.5}
 
 <script>
 const $=id=>document.getElementById(id);
-let servers=[],powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
+let probing=false,servers=[],powerErr='',pickToken=0,noRemLater=new Set(),updating=false,power=null,staged=false,noRem=new Set(),learned={},onlySel=false,groups=[],clients=[],presets=[],cur=null,orig=new Set(),want=new Set();
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const LETTERS={
   a:"ᴀɑȺƛαΔᗅᗩคªᎪ",b:"ʙɃвβƁᏴ฿ᏰƄ",c:"ᴄƇƈ¢©ᏟϾ",d:"ᴅĐđƊɗƉ∂",e:"ᴇЄєεɛƐ€ᕮɆɘΞΣᎬэ",f:"ꜰ₣ƒƑғϝ",g:"ɢǤƓɠ",h:"ʜɦнĦӇ",
@@ -201,7 +201,7 @@ async function post(p,b={}){
 let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
 
 function setSub(){
-  const p=power?` · seu poder: +${power.add} / −${power.rem}`:(/2568/.test(powerErr)?' · ⚠ este servidor não deixa você ver suas permissões: tags só são bloqueadas depois que o servidor recusa':' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':''));
+  const p=power?` · seu poder: +${power.add} / −${power.rem}`:(/2568/.test(powerErr)?' · ⚠ este servidor não deixa você ver suas permissões: o app descobre o seu poder com testes sem efeito':' · ⚠ não consegui ler suas permissões'+(powerErr?' ('+powerErr+')':''));
   $('sub').textContent=`${clients.length} online · ${groups.length} grupos`+p;
 }
 function learnedNo(g,has){const L=learned[g.sgid]||{};return has?L.rem===false:L.add===false}
@@ -238,7 +238,7 @@ function renderGroups(){
     const badge=hard?`<span class="badge b-lock" title="${lackAdd?`Esta tag exige poder ${g.addp} e o seu é ${power.add}.`:hardL?'O servidor recusou isso há pouco. Use ↻ Atualizar para tentar de novo.':'Você não tem permissão para remover esta tag.'}">🔒 ${(lackAdd||(hardL&&!has))?'sem permissão':'sem permissão p/ remover'}</span>`:locked?'<span class="badge b-lock" title="Falhou há pouco. Clique para tentar de novo — pode ter mudado.">⚠ falhou antes</span>':has&&w?'<span class="badge b-has">tem</span>':onlyAdd?'<span class="badge b-lock" title="Esta tag exige poder ${g.remp} para remover e o seu é ${power.rem}.">⚠ + adicionar (não dá p/ remover depois)</span>':!has&&w?'<span class="badge b-add">+ adicionar</span>':has&&!w?'<span class="badge b-rem">− remover</span>':'';
     const sep=g.name.match(/≪(.+?)≫/);
     if(sep) return `<div class="sep">${esc(sep[1])}</div>`;
-    return `<label class="grp ${cur&&!hard?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
+    return `<label class="grp ${cur&&!hard&&!probing?'':'dis'}"><input type="checkbox" data-id="${g.sgid}" ${w?'checked':''} ${hard?'disabled':''}><span class="box"></span><span class="nm">${esc(g.name)}</span>${badge}</label>`}).join('')||'<div class="empty">Nenhum grupo</div>';
   $('groups').querySelectorAll('input').forEach(i=>i.onchange=async()=>{
     const id=i.dataset.id;
     i.checked?want.add(id):want.delete(id);
@@ -280,6 +280,11 @@ async function pick(c){
     const r=await post('/api/member',{cldbid:c.cldbid});
     if(token!==pickToken) return;
     orig=new Set(r.sgids);want=new Set(r.sgids);renderClients();renderWho();update();
+    if(!power){            // servidor não deixa ler as permissões: descobre o poder com comandos sem efeito
+      probing=true;update();
+      try{const p=await post('/api/probe',{cldbid:c.cldbid,have:[...orig]});if(token===pickToken)learned=p.learned||learned}catch(e){}
+      probing=false;update();
+    }
     
   }catch(e){toast(e.message,false)}
   renderGroups();

@@ -371,6 +371,50 @@ def api(path, body):
                 # descontinuado: o teste com ID inexistente dava falso "sem permissão". A regra de poder
                 # (seu poder x o que a tag exige, vindo do servidor) é usada no lugar, sem comandos extras.
                 return {"can": {sgid: None for sgid in body.get("sgids", [])}}
+            if path == "/api/probe":
+                # Servidor não deixa ler as permissões: descobre o poder com comandos SEM efeito, por busca binária.
+                #  remover: grupo em que a pessoa NÃO está   -> 2563 (permitido) ou 2568 (sem permissão)
+                #  adicionar: grupo em que a pessoa JÁ está  -> 2561 (permitido) ou 2568 (sem permissão)
+                cldbid, have = str(body.get("cldbid", "")), {str(x) for x in body.get("have", [])}
+                if not cldbid.isdigit() or not all(x.isdigit() for x in have):
+                    raise RuntimeError("dados inválidos")
+                glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
+                glist = [g for g in glist if g.get("type") in ("1", None)]
+                learned = load(LEARNED_path(), {})
+                budget = 6
+                for key, verb, field, okid in (("rem", "servergroupdelclient", "n_member_removep", "2563"),
+                                               ("add", "servergroupaddclient", "n_member_addp", "2561")):
+                    need = lambda g: int(g.get(field) or 0)
+                    pool = [g for g in glist if need(g) > 0 and ((g["sgid"] in have) == (key == "add"))]
+                    for _ in range(4):
+                        if budget <= 0 or not pool:
+                            break
+                        denied = [need(next(g for g in glist if g["sgid"] == i)) for i, v in learned.items()
+                                  if v.get(key) is False and any(g["sgid"] == i for g in glist) and
+                                  need(next(g for g in glist if g["sgid"] == i)) > 0]
+                        allowed = [need(next(g for g in glist if g["sgid"] == i)) for i, v in learned.items()
+                                   if v.get(key) is True and any(g["sgid"] == i for g in glist)]
+                        lo, hi = min(denied, default=10**9), max(allowed, default=0)
+                        cand = [g for g in pool if hi < need(g) < lo]
+                        if not cand:
+                            break
+                        levels = sorted({need(g) for g in cand})
+                        g = next(x for x in cand if need(x) == levels[len(levels) // 2])
+                        budget -= 1
+                        try:
+                            ts.cmd(f"{verb} sgid={g['sgid']} cldbid={cldbid}")
+                            verdict = True
+                        except RuntimeError as e:
+                            m = str(e)
+                            verdict = False if "id=2568" in m else True if f"id={okid}" in m else None
+                        pool.remove(g)
+                        if verdict is not None:
+                            e = learned.setdefault(g["sgid"], {})
+                            e.setdefault("t", {})
+                            e[key] = verdict
+                            e["t"][key] = time.time()
+                save(LEARNED_path(), learned)
+                return {"learned": fresh_learned()}
             if path == "/api/apply":
                 cldbid, add, rem = str(body["cldbid"]), body.get("add", []), body.get("remove", [])
                 if not cldbid.isdigit() or not all(str(x).isdigit() for x in list(add) + list(rem)):

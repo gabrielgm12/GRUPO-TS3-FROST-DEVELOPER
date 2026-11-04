@@ -1,12 +1,12 @@
 {
-  "version": "1.13",
-  "notes": "Atualização confiável (baixa do commit exato, sem cache velho; checa a cada 30 min); bloqueia por inferência quando o servidor não deixa ler permissões",
+  "version": "1.14",
+  "notes": "Descobre sozinho o seu poder quando o servidor não deixa ler as permissões (testes sem efeito ao escolher a pessoa)",
   "files": {
-    "server.py": "564810dc07ff112f9b770667b31ce869536bb2d2c2e2490ea2f54443bc6be31d",
+    "server.py": "fe8b099c17365bb9d5ffd5afed86bf41b7bca2fae9cdd57e3e0e00ed934b898b",
     "updater.py": "c36f7f821be73184db60475b00c9ba5dc8fc16dc7e9c3cef2e9a30722c56da7f",
-    "index.html": "446e31dcf3a1b2ce92a6d168f4e0d47af94b28246a1b299d7f08bf349068135e",
+    "index.html": "508fec261182abbd02f42df1a6ab895fe0e5ae65eacda935c32f398086ae2c8b",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "70c0c5b4c1a92ccb6ce6cff949e740b953669da6bb9d75bec1b4e9d5db413d9a"
+    "version.txt": "b28d3e4bc89658ab4c8d768f013ddf92a3612e20edf922a81d177f1bd8c35b25"
   }
 }
