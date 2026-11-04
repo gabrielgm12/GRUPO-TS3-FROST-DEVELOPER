@@ -132,7 +132,7 @@ class TS:
         if self.sch in self.reg:
             return
         self.reg.add(self.sch)
-        for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid", "notifypermoverview"):
+        for ev in ("notifyservergrouplist", "notifyservergroupsbyclientid", "notifypermoverview", "notifyservergroupclientlist"):
             self.cmd(f"clientnotifyregister schandlerid={self.sch} event={ev}")
 
     def use(self, sch):
@@ -412,33 +412,47 @@ def api(path, body):
                 glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 glist = [g for g in glist if g.get("type") in ("1", None)]
                 learned = load(LEARNED_path(), {})
-                budget = 6
+                budget, lists = 10, 6
                 for key, verb, field, okid in (("rem", "servergroupdelclient", "n_member_removep", "2563"),
                                                ("add", "servergroupaddclient", "n_member_addp", "2561")):
                     need = lambda g: int(g.get(field) or 0)
-                    pool = [g for g in glist if need(g) > 0 and ((g["sgid"] in have) == (key == "add"))]
-                    for _ in range(4):
+                    # remover: só grupos em que a pessoa NÃO está. adicionar: qualquer grupo, usando um membro dele como alvo
+                    pool = [g for g in glist if need(g) > 0 and (key == "add" or g["sgid"] not in have)]
+                    for _ in range(6):
                         if budget <= 0 or not pool:
                             break
-                        denied = [need(next(g for g in glist if g["sgid"] == i)) for i, v in learned.items()
-                                  if v.get(key) is False and any(g["sgid"] == i for g in glist) and
-                                  need(next(g for g in glist if g["sgid"] == i)) > 0]
-                        allowed = [need(next(g for g in glist if g["sgid"] == i)) for i, v in learned.items()
-                                   if v.get(key) is True and any(g["sgid"] == i for g in glist)]
+                        byid = {g["sgid"]: g for g in glist}
+                        denied = [need(byid[i]) for i, v in learned.items() if i in byid and v.get(key) is False and need(byid[i]) > 0]
+                        allowed = [need(byid[i]) for i, v in learned.items() if i in byid and v.get(key) is True]
                         lo, hi = min(denied, default=10**9), max(allowed, default=0)
                         cand = [g for g in pool if hi < need(g) < lo]
                         if not cand:
                             break
                         levels = sorted({need(g) for g in cand})
                         g = next(x for x in cand if need(x) == levels[len(levels) // 2])
+                        target = cldbid
+                        if key == "add" and g["sgid"] not in have:
+                            pool.remove(g)
+                            if lists <= 0:
+                                continue
+                            lists -= 1
+                            try:
+                                mem = cached("members:" + g["sgid"], 300, lambda: ts.cmd(f"servergroupclientlist sgid={g['sgid']}", "servergroupclientlist"))
+                            except RuntimeError:
+                                continue
+                            mem = [m["cldbid"] for m in mem if m.get("cldbid", "").isdigit()]
+                            if not mem:
+                                continue
+                            target = mem[0]
+                        else:
+                            pool.remove(g)
                         budget -= 1
                         try:
-                            ts.cmd(f"{verb} sgid={g['sgid']} cldbid={cldbid}")
+                            ts.cmd(f"{verb} sgid={g['sgid']} cldbid={target}")
                             verdict = True
                         except RuntimeError as e:
                             m = str(e)
                             verdict = False if "id=2568" in m else True if f"id={okid}" in m else None
-                        pool.remove(g)
                         if verdict is not None:
                             e = learned.setdefault(g["sgid"], {})
                             e.setdefault("t", {})

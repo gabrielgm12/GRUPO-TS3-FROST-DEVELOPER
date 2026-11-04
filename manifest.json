@@ -1,12 +1,12 @@
 {
-  "version": "1.15",
-  "notes": "Botão Diagnóstico (relatório para suporte) e avisos de erro no teste de permissões",
+  "version": "1.16",
+  "notes": "Teste de permissões mais preciso: acha o poder de adicionar em qualquer nível (usa um membro do grupo como alvo, sem efeito)",
   "files": {
-    "server.py": "5e19d0f87daf16fd5b0e80ed686519b1cc2115a5da8d5068e22b1a3c6891a20e",
+    "server.py": "d0aebb9f889dd88f7a6c91f9cb626a4e7f95c94ea29356be0bbe0667a5993317",
     "updater.py": "c36f7f821be73184db60475b00c9ba5dc8fc16dc7e9c3cef2e9a30722c56da7f",
     "index.html": "2bdbd36c222e4864a5347f11790a4a433aa8f84346e6f7a0315eafc6ab47e0b2",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "2a7832af2969e717ea4cbf8ea1a04161903e301b393bbdfa86359cdb0161dabe"
+    "version.txt": "2154db77b545663b343bfd1fa3e5199441c358308f7bf9b5a8d50a1858c9715b"
   }
 }
