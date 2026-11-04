@@ -275,8 +275,13 @@ def my_power(ts, clients, groups):
                 return max(own)
             grp = [int(r["v"]) for r in rows if r.get("t") == "0" and r.get("n") != "1"]
             return max(grp, default=0)
-        return {"add": val("i_group_member_add_power"), "rem": val("i_group_member_remove_power"),
-                "cldbid": me["client_database_id"]}
+        out = {"add": val("i_group_member_add_power"), "rem": val("i_group_member_remove_power"),
+               "cldbid": me["client_database_id"], "cpm": None}
+        try:
+            out["cpm"] = val("i_client_permission_modify_power")   # poder sobre PESSOAS (exigido além do poder sobre a tag)
+        except RuntimeError:
+            pass
+        return out
     return cached("power", 600, read)
 
 
@@ -447,40 +452,80 @@ def api(path, body):
                         feitos += 1
                         tentar("servergroupaddclient", g, mem[0], f"ADICIONAR(membro) nivel {k}")
                 return {"report": "\n".join(L)}
+            if path == "/api/target":
+                cldbid = str(body.get("cldbid", ""))
+                if not cldbid.isdigit():
+                    raise RuntimeError("dados inválidos")
+                def read():
+                    who = ts.cmd("whoami")[0]
+                    rows = ts.cmd(f"permoverview cldbid={cldbid} cid={who['cid']} permsid=i_client_needed_permission_modify_power", "permoverview")
+                    own = [int(r["v"]) for r in rows if r.get("t") == "1" and r.get("v")]
+                    grp = [int(r["v"]) for r in rows if r.get("t") == "0" and r.get("n") != "1" and r.get("v")]
+                    return {"need": max(own) if own else max(grp, default=0)}
+                try:
+                    return cached("target:" + cldbid, 120, read)
+                except RuntimeError:
+                    return {"need": None}   # o servidor não deixa ver as permissões dela
             if path == "/api/can":
                 # Teste de UMA tag, sem efeito em ninguém (usado quando o servidor não deixa ler as permissões).
                 # Os grupos de quem está online vêm de `clientlist -groups` (local, sem custo de flood e sem exigir permissão).
-                #  adicionar: usa alguém online que JÁ tem a tag e tenta adicionar de novo ("já é membro" = permitido)
-                #  remover:   usa alguém online que NÃO tem a tag e tenta remover ("não é membro" = permitido)
-                #  2568 = sem permissão (failed_permid = o seu poder de adicionar/remover). 531/532/2561/2563 = passou da checagem.
+                #  adicionar: alguém online que JÁ tem a tag; tenta adicionar de novo ("já é membro" = permitido)
+                #  remover:   alguém online que NÃO tem a tag; tenta remover ("não é membro" = permitido)
+                # 2568 pode ser por causa da TAG (seu poder de adicionar/remover) ou da PESSOA usada no teste (ela é protegida,
+                # ex.: Admin). O servidor diz qual com failed_permid: só vale como "sem permissão para a tag" se o id for o do
+                # poder de adicionar/remover (aprendido quando o alvo é você mesmo, ou repetido em duas pessoas diferentes).
+                import re
                 sgid, action = str(body.get("sgid", "")), body.get("action")
                 if not sgid.isdigit() or action not in ("add", "rem"):
                     raise RuntimeError("dados inválidos")
                 known = fresh_learned().get(sgid, {})
                 if action in known:
-                    return {"ok": known[action], "learned": fresh_learned()}
-                verdict, why = None, ""
+                    return {"ok": known[action], "why": "", "learned": fresh_learned()}
+                ids_path = os.path.join(DATA, f"permids-{_srvkey[0]}.json")
+                ids = load(ids_path, {})
+                try:
+                    me_clid = ts.cmd("whoami")[0]["clid"]
+                except (RuntimeError, IndexError, KeyError):
+                    me_clid = None
                 online = [c for c in ts.cmd("clientlist -groups") if c.get("client_type") == "0" and c.get("client_database_id")]  # sempre fresco
                 has_g = lambda c: sgid in (c.get("client_servergroups") or "").split(",")
-                if action == "add":
-                    pick = next((c for c in online if has_g(c)), None)
-                else:
-                    pick = next((c for c in online if not has_g(c)), None)
-                if not pick:
+                prot = {g["sgid"]: int(g.get("n_modifyp") or 0) for g in cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))}
+                protecao = lambda c: max([prot.get(x, 0) for x in (c.get("client_servergroups") or "").split(",") if x] or [0])
+                pool = [c for c in online if has_g(c) == (action == "add")]
+                pool.sort(key=lambda c: (c["clid"] != me_clid, protecao(c)))   # você primeiro, depois as pessoas menos protegidas
+                verb = "servergroupaddclient" if action == "add" else "servergroupdelclient"
+                verdict, why, denials = None, "", []
+                if not pool:
                     why = "ninguém online tem esta tag para servir de teste" if action == "add" else "todos online já têm esta tag"
-                else:
-                    verb = "servergroupaddclient" if action == "add" else "servergroupdelclient"
+                for c in pool[:2]:
                     try:
-                        ts.cmd(f"{verb} sgid={sgid} cldbid={pick['client_database_id']}")
+                        ts.cmd(f"{verb} sgid={sgid} cldbid={c['client_database_id']}")
                         verdict = True
+                        break
                     except RuntimeError as e:
                         m = str(e)
+                        pid = (re.search(r"permid=(\d+)", m) or [None, None])[1]
                         if "id=2568" in m:
-                            verdict = False
+                            denials.append((c["clid"] == me_clid, pid))
                         elif any(f"id={x})" in m or f"id={x} " in m for x in ("531", "532", "2561", "2563")):
                             verdict = True
+                            break
                         else:
                             why = m
+                            break
+                if verdict is None and denials:
+                    sure = set(ids.get(action, []))
+                    first_self, first_pid = denials[0]
+                    if first_self and first_pid:
+                        sure.add(first_pid)            # negou até para você mesmo: este id é o do poder de adicionar/remover
+                    if len(denials) == 2 and denials[0][1] and denials[0][1] == denials[1][1]:
+                        sure.add(denials[0][1])        # mesma permissão negou em duas pessoas diferentes
+                    ids[action] = sorted(sure)
+                    save(ids_path, ids)
+                    if any(p in sure for _, p in denials):
+                        verdict = False
+                    else:
+                        why = "negado por causa da pessoa usada no teste (protegida), não da tag"
                 if verdict is not None:
                     learned = load(LEARNED_path(), {})
                     e = learned.setdefault(sgid, {})
