@@ -1,12 +1,12 @@
 {
-  "version": "1.27",
-  "notes": "Tags 'sem como testar' (ninguém online com elas) agora são deduzidas pelas já verificadas: se você passou numa tag que exige 75, todas até 75 liberam; se foi negado em 100, de 100 pra cima ficam bloqueadas",
+  "version": "1.28",
+  "notes": "Removida a verificação de permissões. Ao aplicar, o app tenta de verdade e mostra um relatório: o que foi feito e o que não deu (sem permissão etc.)",
   "files": {
-    "server.py": "8576806eb7da0f46cbd801b5273e0d0fb670e192919299becc785fa761af2029",
+    "server.py": "3aa8399e185f4a34ccb6a1cb57c03264070756fffab546d8d847e7af99ea0368",
     "updater.py": "93e9fc65ca6be027567518efdc38dd1f4060763f81453083d91e22ecdb0f0166",
-    "index.html": "b5bacb1217fd583b2e4b49c7a1462e51c0d28e6c028ee6b57448fa38f4378700",
+    "index.html": "668f517803a0e2c5cabaea67db905b0cc141600da480c1af3bd3cd712a5bcc3d",
     "skin-frost.jpg": "eec035af4c86f1dfd8df8308a8b6920bbc393f77034c7395e2d9697023afbef0",
     "icon.png": "1bb05dbbd01786353a7652dbeaceab6b11fef07aeef69cf733f5d6582bf2116f",
-    "version.txt": "2fcac8d3d1544638590fffbf9f568f8a9828fc82a66c9fa6533c57831a57d913"
+    "version.txt": "633df97b0b11b6527deb2f494abe753aa0031048c55b083193b00caf82d73267"
   }
 }

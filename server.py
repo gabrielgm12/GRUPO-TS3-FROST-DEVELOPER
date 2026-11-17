@@ -340,13 +340,7 @@ def api(path, body):
                 if not clients:
                     _cache.clear()
                     raise RuntimeError("O TeamSpeak não está conectado a um servidor.")
-                perr = ""
-                try:
-                    power = my_power(ts, clients, groups)
-                    if power is None:
-                        perr = "não achei você na lista de clientes"
-                except RuntimeError as e:
-                    power, perr = None, str(e)
+                perr, power = "", None   # não lê mais as permissões: o servidor decide na hora de aplicar
                 return {
                     "powerErr": perr,
                     "learned": fresh_learned(),
@@ -626,12 +620,7 @@ def api(path, body):
                 glist = cached("groups", 120, lambda: ts.cmd("servergrouplist", "servergrouplist"))
                 glist = [g for g in glist if g.get("type") in ("1", None)]
                 clist = [c for c in cached("clients", 15, lambda: ts.cmd("clientlist")) if c.get("client_type") == "0"]
-                try:
-                    power = my_power(ts, clist, glist)
-                except RuntimeError:
-                    power = None
-                addp = {g["sgid"]: int(g.get("n_member_addp") or 0) for g in glist}
-                remp = {g["sgid"]: int(g.get("n_member_removep") or 0) for g in glist}
+                power, addp, remp = None, {}, {}
                 for sgids, verb, key in ((add, "servergroupaddclient", "add"), (rem, "servergroupdelclient", "rem")):
                     for sgid in sgids:
                         entry = learned.setdefault(sgid, {})
