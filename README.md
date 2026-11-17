@@ -5,7 +5,7 @@ Funciona com as **suas permissões** no servidor; não consegue passar por cima 
 
 ## Usar
 - **Mac:** `./build_app.sh` gera o `Grupos TS3.app`.
-- **Windows:** instalador em `windows/` (precisa do arquivo local `senha.nsh`, que não vai para o GitHub).
+- **Windows:** instalador em `windows/` (`./windows/build_instalador.sh`), sem senha.
 - No TeamSpeak ative o plugin **ClientQuery** (Preferências → Suplementos → Browse online) e copie a API key para o app.
 
 ## Atualização automática
@@ -18,5 +18,5 @@ Publicar uma versão nova:
 ```
 
 ## Segurança
-- `config.json` (API key), presets e a senha do instalador **nunca** entram no repositório (`.gitignore`).
+- `config.json` (API key), e presets **nunca** entram no repositório (`.gitignore`).
 - Quem controla este repositório controla o que o app executa ao atualizar: mantenha a conta com 2FA.

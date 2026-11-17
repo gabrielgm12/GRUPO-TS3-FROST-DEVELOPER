@@ -1,8 +1,7 @@
 ﻿; Instalador do Grupos TS3 (Windows) - instalar / atualizar / corrigir / desinstalar
 Unicode true
 !define NOME "Grupos TS3"
-!define VERSAO "1.28"
-!include "senha.nsh"   ; define SENHA (arquivo fora do GitHub)
+!define VERSAO "1.29"
 !define REG "Software\Microsoft\Windows\CurrentVersion\Uninstall\GruposTS3"
 
 !include "MUI2.nsh"
@@ -34,7 +33,6 @@ BrandingText "Frost - ${NOME} ${VERSAO}"
 !define MUI_FINISHPAGE_RUN_TEXT "Abrir o ${NOME} agora"
 !define MUI_FINISHPAGE_TEXT "Tudo certo.$\r$\n$\r$\nNa primeira vez, o app pede a API key: no TeamSpeak vá em Preferências > Suplementos > Plug-ins > ClientQuery > Configurações."
 
-Var SenhaBox
 Var Instalado   ; 0 = nao instalado, 1 = instalado, 2 = registrado mas com arquivos faltando
 Var VerInst
 Var Cmp         ; 0 igual, 1 instalada MAIS NOVA, 2 instalada mais antiga
@@ -73,7 +71,6 @@ Function .onInit
 FunctionEnd
 
 !insertmacro MUI_PAGE_WELCOME
-Page custom PaginaSenha SaiSenha
 Page custom PaginaModo SaiModo
 !define MUI_PAGE_CUSTOMFUNCTION_PRE PreDiretorio
 !insertmacro MUI_PAGE_DIRECTORY
@@ -82,29 +79,6 @@ Page custom PaginaModo SaiModo
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "PortugueseBR"
-
-; ---------------- senha ----------------
-Function PaginaSenha
-  !insertmacro MUI_HEADER_TEXT "Senha de instalação" "Digite a senha para liberar a instalação."
-  nsDialogs::Create 1018
-  Pop $0
-  ${NSD_CreateLabel} 0 10u 100% 12u "Senha:"
-  Pop $0
-  ${NSD_CreatePassword} 0 24u 100% 14u ""
-  Pop $SenhaBox
-  ${NSD_CreateLabel} 0 46u 100% 24u "Esta instalação é protegida. Sem a senha correta não é possível continuar."
-  Pop $0
-  SetCtlColors $0 "8878AD" "transparent"
-  nsDialogs::Show
-FunctionEnd
-
-Function SaiSenha
-  ${NSD_GetText} $SenhaBox $0
-  StrCmpS $0 "${SENHA}" ok
-  MessageBox MB_ICONSTOP|MB_OK "Senha incorreta."
-  Abort
-  ok:
-FunctionEnd
 
 ; ---------------- escolha: atualizar / corrigir / ... ----------------
 Function PaginaModo

@@ -1,2 +1,0 @@
-; copie para senha.nsh e coloque a senha do instalador
-!define SENHA "troque-aqui"
