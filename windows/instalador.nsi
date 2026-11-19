@@ -1,7 +1,7 @@
 ﻿; Instalador do Grupos TS3 (Windows) - instalar / atualizar / corrigir / desinstalar
 Unicode true
 !define NOME "Grupos TS3"
-!define VERSAO "1.30"
+!define VERSAO "1.31"
 !define REG "Software\Microsoft\Windows\CurrentVersion\Uninstall\GruposTS3"
 
 !include "MUI2.nsh"
