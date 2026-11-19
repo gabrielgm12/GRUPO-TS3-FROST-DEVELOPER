@@ -160,6 +160,7 @@ dialog p{color:var(--mut);line-height:1.5}
   </section>
 </main>
 
+<div id="bloq" hidden style="position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;text-align:center;padding:24px;background:rgba(10,6,20,.97);color:#f3eefc"><div style="font-size:54px">🔒</div><div id="bloqmsg" style="font-size:22px;font-weight:700;max-width:520px"></div><div style="color:#9a8cc0;font-size:13px">O app volta a funcionar quando for liberado.</div></div>
 <div id="toast"></div>
 
 <dialog id="rep">
@@ -211,11 +212,15 @@ const norm=fold;
 const color=s=>{let h=0;for(const c of s)h=(h*31+c.codePointAt(0))%360;return `hsl(${h} 55% 45%)`};
 const ini=s=>{const m=[...s.replace(/[^\p{L}\p{N}\s]/gu,'').trim()];return (m[0]||'?').toUpperCase()};
 
+function showBloq(m){const e=$('bloq');$('bloqmsg').textContent=m||'Temporariamente bloqueado.';e.hidden=false;e.style.display='flex'}
+function hideBloq(){const e=$('bloq');if(!e.hidden){e.hidden=true;e.style.display='none';location.reload()}}
+async function checkBloq(){try{const s=await (await fetch('/api/status')).json();s.blocked?showBloq(s.message):hideBloq()}catch(e){}}
+setInterval(checkBloq,30000);
 async function post(p,b={}){
   let r;
   try{r=await fetch(p,{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'gts3'},body:JSON.stringify(b)})}
   catch(e){throw new Error('O app local parou de responder. Feche esta janela e abra o Grupos TS3 de novo.')}
-  const j=await r.json(); if(!r.ok) throw new Error(j.error||'erro'); return j;
+  const j=await r.json(); if(!r.ok){if(/^BLOQUEADO: /.test(j.error||'')){showBloq(j.error.slice(11))}throw new Error(j.error||'erro')} return j;
 }
 let tt;function toast(t,ok=true){const e=$('toast');e.textContent=t;e.className='show '+(ok?'ok':'bad');clearTimeout(tt);tt=setTimeout(()=>e.className='',3500)}
 
@@ -393,7 +398,7 @@ $('updgo').onclick=async()=>{
 setTimeout(()=>checkUpdate(false),800);
 setInterval(()=>checkUpdate(false),30*60*1000);
 window.addEventListener('focus',()=>{if(Date.now()-lastChk>10*60*1000){lastChk=Date.now();checkUpdate(false)}});
-(async()=>{const s=await (await fetch('/api/status')).json();$('ver').textContent='v'+(s.version||'');if(!s.hasKey)$('dlg').showModal();else load()})();
+(async()=>{const s=await (await fetch('/api/status')).json();$('ver').textContent='v'+(s.version||'');if(s.blocked){showBloq(s.message);return}if(!s.hasKey)$('dlg').showModal();else load()})();
 </script>
 </body>
 </html>

@@ -7,7 +7,7 @@ Como funciona
   3. Na próxima abertura (ou ao clicar em "Reiniciar") o app passa a rodar a partir de <dados>/current/.
 Nada é gravado dentro da pasta do app instalado, então funciona no Mac e no Windows sem permissão extra.
 """
-import hashlib, json, os, re, shutil, urllib.request
+import hashlib, json, os, re, shutil, urllib.error, urllib.request
 
 REPO = "gabrielgm12/GRUPO-TS3-FROST-DEVELOPER"
 BRANCH = "main"
@@ -166,3 +166,18 @@ def download(data_dir, running_version):
         shutil.rmtree(stage, ignore_errors=True)
         raise
     return {"ok": True, "updated": True, "latest": latest, "notes": m.get("notes", "")}
+
+
+def bloqueio():
+    """Lê o bloqueio remoto (arquivo bloqueio.json do repositório). Devolve (bloqueado, mensagem) ou None se não deu para ler.
+    Arquivo ausente (404) = não está bloqueado."""
+    base, _ = _base()
+    try:
+        d = json.loads(_get("bloqueio.json", 8, base).decode("utf-8"))
+        return bool(d.get("bloqueado")), str(d.get("mensagem") or "")
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False, ""
+        return None
+    except Exception:
+        return None

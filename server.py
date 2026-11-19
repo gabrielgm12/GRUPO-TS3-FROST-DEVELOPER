@@ -290,7 +290,41 @@ def my_power(ts, clients, groups):
     return cached("power", 600, read)
 
 
+# ---- bloqueio remoto (bloqueio.json no GitHub): o dono do repositório pode bloquear/liberar o app para todo mundo ----
+BLOQ = {"on": False, "msg": ""}
+BLOQ_PRONTO = threading.Event()
+MSG_PADRAO = "Temporariamente bloqueado."
+
+
+def _bloq_arquivo():
+    return os.path.join(DATA, "bloqueio.json")
+
+
+def bloq_loop():
+    try:   # último estado conhecido (vale se estiver sem internet)
+        d = json.load(open(_bloq_arquivo(), encoding="utf-8"))
+        BLOQ.update(on=bool(d.get("on")), msg=str(d.get("msg") or ""))
+        if BLOQ["on"]:
+            BLOQ_PRONTO.set()
+    except Exception:
+        pass
+    while True:
+        r = updater.bloqueio()
+        if r is not None:
+            BLOQ["on"], BLOQ["msg"] = r[0], (r[1] or MSG_PADRAO)
+            try:
+                json.dump({"on": BLOQ["on"], "msg": BLOQ["msg"]}, open(_bloq_arquivo(), "w", encoding="utf-8"))
+            except OSError:
+                pass
+        BLOQ_PRONTO.set()
+        time.sleep(60)
+
+
 def api(path, body):
+    if path not in ("/api/quit", "/api/update/check", "/api/update/download", "/api/restart"):
+        BLOQ_PRONTO.wait(10)
+        if BLOQ["on"]:
+            raise RuntimeError("BLOQUEADO: " + (BLOQ["msg"] or MSG_PADRAO))
     if path == "/api/quit":  # usado pelo instalador para fechar o app antes de atualizar
         threading.Timer(0.3, lambda: os._exit(0)).start()
         return {"ok": True}
@@ -680,7 +714,9 @@ class H(BaseHTTPRequestHandler):
             with open(os.path.join(HERE, "skin-frost.jpg"), "rb") as f:
                 return self._send(200, f.read(), "image/jpeg")
         if urlparse(self.path).path == "/api/status":
-            return self._send(200, {"hasKey": bool(load(CONFIG, {}).get("apikey")), "version": VERSION})
+            BLOQ_PRONTO.wait(10)
+            return self._send(200, {"hasKey": bool(load(CONFIG, {}).get("apikey")), "version": VERSION,
+                                    "blocked": BLOQ["on"], "message": BLOQ["msg"] or MSG_PADRAO})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -757,6 +793,7 @@ if __name__ == "__main__":
         if WIN:
             open_window()
         sys.exit(0)
+    threading.Thread(target=bloq_loop, daemon=True).start()
     print("Painel em " + URL + "  (Ctrl+C para sair)")
     if WIN or os.environ.get("GRUPOS_TESTE_WATCHDOG"):
         threading.Thread(target=watchdog, daemon=True).start()
