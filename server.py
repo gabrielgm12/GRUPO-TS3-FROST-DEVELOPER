@@ -297,7 +297,7 @@ MSG_PADRAO = "Temporariamente bloqueado."
 
 
 def _bloq_arquivo():
-    return os.path.join(DATA, "bloqueio.json")
+    return os.path.join(DATA, "bloqueio-estado.json")
 
 
 def bloq_loop():

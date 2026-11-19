@@ -1,1 +1,4 @@
-{"on": true, "msg": "Temporariamente bloqueado."}
+{
+  "bloqueado": true,
+  "mensagem": "Temporariamente bloqueado."
+}
